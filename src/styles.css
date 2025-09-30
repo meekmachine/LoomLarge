@@ -1,0 +1,17 @@
+
+/* Fullscreen baseline */
+html, body, #root { height: 100%; margin: 0; padding: 0; }
+* { box-sizing: border-box; }
+
+/* Fullscreen Three.js scene container */
+.scene-root, .fullscreen-scene {
+  width: 100vw;
+  height: 100vh;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  position: fixed; /* ensure it fills viewport regardless of layout */
+  inset: 0;
+  background: #0b0b0c;
+}
