@@ -3,4 +3,4 @@ dist
 .DS_Store
 
 # Large files hosted externally (GitHub Releases)
-public/characters/jonathan.glb
+public/characters/jonathan.glb.vite

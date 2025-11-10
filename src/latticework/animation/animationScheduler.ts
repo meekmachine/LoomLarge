@@ -400,10 +400,6 @@ export class AnimationScheduler {
   /** Drive the scheduler from an external clock (preferred, VISOS parity). */
   step(dtSec: number){
     if (!this.useExternalStep || !this.playing) {
-      // Only log first few skips to avoid spam
-      if (this.playTimeSec < 0.5) {
-        console.log('[AnimationScheduler] step() skipped - useExternalStep:', this.useExternalStep, 'playing:', this.playing);
-      }
       return;
     }
     this.playTimeSec += Math.max(0, dtSec || 0);
