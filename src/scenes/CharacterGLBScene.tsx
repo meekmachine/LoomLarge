@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 
 export type CharacterReady = {
   scene: THREE.Scene;
@@ -20,6 +21,7 @@ type Props = {
   onReady?: (payload: CharacterReady) => void; // callback when model is loaded
   className?: string;        // optional class for the container div
   cameraOverride?: CameraOverride; // manually set camera for quick testing
+  skyboxUrl?: string;        // path to HDR/EXR skybox file in /public
 };
 
 export default function CharacterGLBScene({
@@ -28,6 +30,7 @@ export default function CharacterGLBScene({
   onReady,
   className,
   cameraOverride,
+  skyboxUrl,
 }: Props) {
   const mountRef = useRef<HTMLDivElement | null>(null);
 
@@ -51,12 +54,57 @@ export default function CharacterGLBScene({
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
     camera.position.set(0, 1.6, 3);
 
-    // Lights
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x404040, 0.7);
+    // Load skybox if provided
+    if (skyboxUrl) {
+      const isHDR = skyboxUrl.toLowerCase().endsWith('.hdr') || skyboxUrl.toLowerCase().endsWith('.exr');
+
+      if (isHDR) {
+        // Load HDR/EXR skybox
+        const rgbeLoader = new RGBELoader();
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        pmremGenerator.compileEquirectangularShader();
+
+        rgbeLoader.load(
+          skyboxUrl,
+          (texture) => {
+            const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+            scene.background = envMap;
+            scene.environment = envMap;
+            texture.dispose();
+            pmremGenerator.dispose();
+            console.log('[CharacterGLBScene] HDR Skybox loaded:', skyboxUrl);
+          },
+          undefined,
+          (error) => {
+            console.error('[CharacterGLBScene] Failed to load HDR skybox:', error);
+          }
+        );
+      } else {
+        // Load regular image (JPG/PNG) skybox
+        const textureLoader = new THREE.TextureLoader();
+        textureLoader.load(
+          skyboxUrl,
+          (texture) => {
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            texture.colorSpace = THREE.SRGBColorSpace;
+            scene.background = texture;
+            scene.environment = texture;
+            console.log('[CharacterGLBScene] Image Skybox loaded:', skyboxUrl);
+          },
+          undefined,
+          (error) => {
+            console.error('[CharacterGLBScene] Failed to load image skybox:', error);
+          }
+        );
+      }
+    }
+
+    // Lights - softer, more ambient lighting
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x404040, 0.4);
     hemi.position.set(0, 10, 0);
     scene.add(hemi);
 
-    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.3);
     dir.position.set(5, 10, 7.5);
     dir.castShadow = true;
     scene.add(dir);
@@ -164,7 +212,7 @@ export default function CharacterGLBScene({
       renderer.dispose();
       mount.removeChild(renderer.domElement);
     };
-  }, [src, autoRotate, onReady, cameraOverride]);
+  }, [src, autoRotate, onReady, cameraOverride, skyboxUrl]);
 
   return <div ref={mountRef} className={className} />;
 }

@@ -1,0 +1,31 @@
+{
+  "name": "test1_viseme_cycle",
+  "snippetCategory": "visemeSnippet",
+  "snippetPriority": -50,
+  "isPlaying": true,
+  "loop": false,
+  "maxTime": 13.0,
+  "curves": {
+    "0":  [ { "time": 0.0,  "intensity": 90 }, { "time": 0.5,  "intensity": 0 } ],
+    "1":  [ { "time": 0.6,  "intensity": 90 }, { "time": 1.1,  "intensity": 0 } ],
+    "2":  [ { "time": 1.2,  "intensity": 90 }, { "time": 1.7,  "intensity": 0 } ],
+    "3":  [ { "time": 1.8,  "intensity": 90 }, { "time": 2.3,  "intensity": 0 } ],
+    "4":  [ { "time": 2.4,  "intensity": 90 }, { "time": 2.9,  "intensity": 0 } ],
+    "5":  [ { "time": 3.0,  "intensity": 90 }, { "time": 3.5,  "intensity": 0 } ],
+    "6":  [ { "time": 3.6,  "intensity": 90 }, { "time": 4.1,  "intensity": 0 } ],
+    "7":  [ { "time": 4.2,  "intensity": 90 }, { "time": 4.7,  "intensity": 0 } ],
+    "8":  [ { "time": 4.8,  "intensity": 90 }, { "time": 5.3,  "intensity": 0 } ],
+    "9":  [ { "time": 5.4,  "intensity": 90 }, { "time": 5.9,  "intensity": 0 } ],
+    "10": [ { "time": 6.0,  "intensity": 90 }, { "time": 6.5,  "intensity": 0 } ],
+    "11": [ { "time": 6.6,  "intensity": 90 }, { "time": 7.1,  "intensity": 0 } ],
+    "12": [ { "time": 7.2,  "intensity": 90 }, { "time": 7.7,  "intensity": 0 } ],
+    "13": [ { "time": 7.8,  "intensity": 90 }, { "time": 8.3,  "intensity": 0 } ],
+    "14": [ { "time": 8.4,  "intensity": 90 }, { "time": 8.9,  "intensity": 0 } ],
+    "15": [ { "time": 9.0,  "intensity": 90 }, { "time": 9.5,  "intensity": 0 } ],
+    "16": [ { "time": 9.6,  "intensity": 90 }, { "time": 10.1, "intensity": 0 } ],
+    "17": [ { "time": 10.2, "intensity": 90 }, { "time": 10.7, "intensity": 0 } ],
+    "18": [ { "time": 10.8, "intensity": 90 }, { "time": 11.3, "intensity": 0 } ],
+    "19": [ { "time": 11.4, "intensity": 90 }, { "time": 11.9, "intensity": 0 } ],
+    "20": [ { "time": 12.0, "intensity": 90 }, { "time": 12.5, "intensity": 0 } ]
+  }
+}

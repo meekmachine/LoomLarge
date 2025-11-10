@@ -1,50 +1,82 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import CharacterGLBScene from './scenes/CharacterGLBScene';
-import AUQuickPanel from './components/au/AUQuickPanel';
-import { EngineThree } from './engine/EngineThree';
+import SliderDrawer from './components/SliderDrawer';
 import { useThreeState } from './context/threeContext';
 import './styles.css';
+import { Text } from '@chakra-ui/react';
+
+import { AU_TO_MORPHS } from './engine/arkit/shapeDict';
 
 export default function App() {
-  // Access the global three context
-  const threeCtx = useThreeState();
+  const { engine, anim } = useThreeState();
 
-  // Create and persist engine
-  const [engine] = useState(() => new EngineThree());
+  const [auditSummary, setAuditSummary] = useState<{ morphCount:number; totalAUs:number; fullCovered:number; partial:number; zero:number } | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Helper: audit morph coverage
+  function auditMorphCoverage(model: any) {
+    const morphs = new Set<string>();
+    try {
+      model?.traverse?.((obj: any) => {
+        const dict = obj?.morphTargetDictionary;
+        if (dict && typeof dict === 'object') {
+          Object.keys(dict).forEach(k => morphs.add(k));
+        }
+      });
+    } catch {}
+    const mapping = AU_TO_MORPHS || {};
+    const rows: Array<{ au: string; mapped: string[]; present: string[]; missing: string[] }> = [];
+    Object.entries(mapping).forEach(([au, keys]: [string, string[]]) => {
+      const present = keys.filter(k => morphs.has(k));
+      const missing = keys.filter(k => !morphs.has(k));
+      rows.push({ au, mapped: keys, present, missing });
+    });
+    // Summaries
+    const totalAUs = rows.length;
+    const fullCovered = rows.filter(r => r.missing.length === 0).length;
+    const partial = rows.filter(r => r.present.length > 0 && r.missing.length > 0).length;
+    const zero = rows.filter(r => r.present.length === 0).length;
+    console.groupCollapsed('%c[AU↔Morph Audit] GLB morph coverage vs ShapeDict', 'color:#8be9fd');
+    console.log('Morph count in GLB:', morphs.size);
+    console.log('AUs total:', totalAUs, '| fully covered:', fullCovered, '| partial:', partial, '| zero coverage:', zero);
+    console.table(rows.map(r => ({
+      AU: r.au,
+      mapped: r.mapped.join(', '),
+      present: r.present.join(', '),
+      missing: r.missing.join(', ')
+    })));
+    console.groupEnd();
+    return { morphCount: morphs.size, totalAUs, fullCovered, partial, zero };
+  }
 
   const handleReady = useCallback(
     ({ meshes, model }: { meshes: any[]; model?: any }) => {
       engine.onReady({ meshes, model });
+      try {
+        const summary = auditMorphCoverage(model);
+        setAuditSummary(summary);
+      } catch {}
+      anim?.play?.();
     },
-    [engine]
+    [engine, anim]
   );
 
-  const applyAU = useCallback(
-    (id: number | string, value: number) => {
-      engine.setAU(id, value);
-    },
-    [engine]
-  );
-
-  const setMorph = useCallback(
-    (key: string, value: number) => {
-      engine.setMorph(key, value);
-    },
-    [engine]
-  );
-
-  // Enrich the three context dynamically
-  threeCtx.engine = engine;
+  // Camera override memoized
+  const cameraOverride = useMemo(() => ({
+    position: [1.851, 5.597, 6.365] as [number, number, number],
+    target:   [1.851, 5.597, -0.000] as [number, number, number],
+  }), []);
 
   return (
     <div className="fullscreen-scene">
       <CharacterGLBScene
         src="/characters/jonathan.glb"
         className="fullscreen-scene"
-        cameraOverride={{ position: [1.851, 5.597, 6.365], target: [1.851, 5.597, -0.000] }}
+        cameraOverride={cameraOverride}
+        skyboxUrl="/skyboxes/3BR2D07.jpg"
         onReady={handleReady}
       />
-      <AUQuickPanel applyAU={applyAU} setMorph={setMorph} />
+      <SliderDrawer isOpen={drawerOpen} onToggle={() => setDrawerOpen(!drawerOpen)} />
     </div>
   );
 }

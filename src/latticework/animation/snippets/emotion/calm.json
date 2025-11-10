@@ -1,0 +1,17 @@
+{
+    "curves": {
+      "12": [
+        { "time": 0,   "intensity": 0 },
+        { "time": 0.3, "intensity": 20 },
+        { "time": 1.0, "intensity": 20 },
+        { "time": 1.5, "intensity": 0 }
+      ],
+      "4": [
+        { "time": 0,   "intensity": 10 },
+        { "time": 0.3, "intensity": 5 },
+        { "time": 1.0, "intensity": 5 },
+        { "time": 1.5, "intensity": 10 }
+      ]
+    },
+    "loop": false
+  }

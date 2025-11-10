@@ -56,6 +56,16 @@ export const AU_TO_MORPHS: Record<number, string[]> = {
   62: ['Eye_L_Look_R','Eye_R_Look_R'],
   63: ['Eye_L_Look_Up','Eye_R_Look_Up'],
   64: ['Eye_L_Look_Down','Eye_R_Look_Down'],
+  // Single-eye controls (Left eye)
+  65: ['Eye_L_Look_L'],
+  66: ['Eye_L_Look_R'],
+  67: ['Eye_L_Look_Up'],
+  68: ['Eye_L_Look_Down'],
+  // Single-eye controls (Right eye)
+  69: ['Eye_R_Look_L'],
+  70: ['Eye_R_Look_R'],
+  71: ['Eye_R_Look_Up'],
+  72: ['Eye_R_Look_Down'],
 };
 
 // Fallback name variants to handle vendor/export naming drift.
@@ -143,6 +153,16 @@ export const EYE_LOOK_KEYS: string[] = [
   'Eye_R_Look_L','Eye_R_Look_R','Eye_R_Look_Up','Eye_R_Look_Down'
 ];
 
+/** Individual-eye combined axes */
+export const EYE_L_COMBINED_AXES = {
+  horizontal: { left: 65, right: 66 },
+  vertical:   { up: 67,  down: 68 },
+};
+export const EYE_R_COMBINED_AXES = {
+  horizontal: { left: 69, right: 70 },
+  vertical:   { up: 71,  down: 72 },
+};
+
 // Bone bindings for rigs that rotate eyeballs via armature rather than morphs.
 // Mapping-only: the engine resolves placeholder node names (EYE_L/EYE_R/etc.) to real nodes using candidates.
 export type BoneBinding = {
@@ -187,6 +207,16 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
     { node: 'EYE_L', channel: 'rx', scale: 1, maxDegrees: 12 },
     { node: 'EYE_R', channel: 'rx', scale: 1, maxDegrees: 12 },
   ],
+  // Single-eye (Left) — horizontal (ry) and vertical (rx)
+  65: [ { node: 'EYE_L', channel: 'ry', scale: -1, maxDegrees: 15 } ],
+  66: [ { node: 'EYE_L', channel: 'ry', scale:  1, maxDegrees: 15 } ],
+  67: [ { node: 'EYE_L', channel: 'rx', scale: -1, maxDegrees: 12 } ],
+  68: [ { node: 'EYE_L', channel: 'rx', scale:  1, maxDegrees: 12 } ],
+  // Single-eye (Right)
+  69: [ { node: 'EYE_R', channel: 'ry', scale: -1, maxDegrees: 15 } ],
+  70: [ { node: 'EYE_R', channel: 'ry', scale:  1, maxDegrees: 15 } ],
+  71: [ { node: 'EYE_R', channel: 'rx', scale: -1, maxDegrees: 12 } ],
+  72: [ { node: 'EYE_R', channel: 'rx', scale:  1, maxDegrees: 12 } ],
 
   // Jaw
   25: [ // Lips Part — small jaw open
@@ -269,6 +299,10 @@ export interface AUInfo {
   faceArea?: 'Upper' | 'Lower'; // macro region
   facePart?: 'Forehead' | 'Brow' | 'Eyelids' | 'Eyes' | 'Nose' | 'Cheeks' | 'Mouth' | 'Chin' | 'Jaw' | 'Head' | 'Tongue' | 'Other';
   faceSection?: string; // back-compat (mirror of facePart)
+  /** If this AU is part of a bidirectional continuum, specify the opposite AU ID */
+  continuumPair?: string;
+  /** Direction in the continuum: 'negative' or 'positive' */
+  continuumDirection?: 'negative' | 'positive';
 }
 
 export const AU_INFO: Record<string, AUInfo> = {
@@ -282,10 +316,10 @@ export const AU_INFO: Record<string, AUInfo> = {
   '6':  { id:'6',  name:'Cheek Raiser',      muscularBasis:'orbicularis oculi (pars orbitalis)', links:['https://en.wikipedia.org/wiki/Orbicularis_oculi'], faceArea:'Upper', facePart:'Cheeks', faceSection:'Cheeks' },
   '7':  { id:'7',  name:'Lid Tightener',     muscularBasis:'orbicularis oculi (pars palpebralis)', links:['https://en.wikipedia.org/wiki/Orbicularis_oculi'], faceArea:'Upper', facePart:'Eyelids', faceSection:'Eyelids' },
   '43': { id:'43', name:'Eyes Closed',       muscularBasis:'orbicularis oculi', links:['https://en.wikipedia.org/wiki/Orbicularis_oculi_muscle'], faceArea:'Upper', facePart:'Eyelids', faceSection:'Eyelids' },
-  '61': { id:'61', name:'Eyes Turn Left',    faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes' },
-  '62': { id:'62', name:'Eyes Turn Right',   faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes' },
-  '63': { id:'63', name:'Eyes Up',           faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes' },
-  '64': { id:'64', name:'Eyes Down',         faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes' },
+  '61': { id:'61', name:'Eyes Turn Left',    faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes', continuumPair:'62', continuumDirection:'negative' },
+  '62': { id:'62', name:'Eyes Turn Right',   faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes', continuumPair:'61', continuumDirection:'positive' },
+  '63': { id:'63', name:'Eyes Up',           faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes', continuumPair:'64', continuumDirection:'positive' },
+  '64': { id:'64', name:'Eyes Down',         faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes', continuumPair:'63', continuumDirection:'negative' },
 
   // Nose / Cheeks
   '9':  { id:'9',  name:'Nose Wrinkler',     muscularBasis:'levator labii superioris alaeque nasi', links:['https://en.wikipedia.org/wiki/Levator_labii_superioris_alaeque_nasi'], faceArea:'Upper', facePart:'Nose', faceSection:'Nose' },
@@ -320,12 +354,12 @@ export const AU_INFO: Record<string, AUInfo> = {
   '30': { id:'30', name:'Jaw Sideways',      faceArea:'Lower', facePart:'Jaw', faceSection:'Jaw' },
 
   // Head (Upper, convenience)
-  '31': { id:'31', name:'Head Turn Left',    faceArea:'Upper', facePart:'Head', faceSection:'Head' },
-  '32': { id:'32', name:'Head Turn Right',   faceArea:'Upper', facePart:'Head', faceSection:'Head' },
-  '33': { id:'33', name:'Head Up',           faceArea:'Upper', facePart:'Head', faceSection:'Head' },
-  '54': { id:'54', name:'Head Down',         faceArea:'Upper', facePart:'Head', faceSection:'Head' },
-  '55': { id:'55', name:'Head Tilt Left',    faceArea:'Upper', facePart:'Head', faceSection:'Head' },
-  '56': { id:'56', name:'Head Tilt Right',   faceArea:'Upper', facePart:'Head', faceSection:'Head' },
+  '31': { id:'31', name:'Head Turn Left',    faceArea:'Upper', facePart:'Head', faceSection:'Head', continuumPair:'32', continuumDirection:'negative' },
+  '32': { id:'32', name:'Head Turn Right',   faceArea:'Upper', facePart:'Head', faceSection:'Head', continuumPair:'31', continuumDirection:'positive' },
+  '33': { id:'33', name:'Head Up',           faceArea:'Upper', facePart:'Head', faceSection:'Head', continuumPair:'54', continuumDirection:'positive' },
+  '54': { id:'54', name:'Head Down',         faceArea:'Upper', facePart:'Head', faceSection:'Head', continuumPair:'33', continuumDirection:'negative' },
+  '55': { id:'55', name:'Head Tilt Left',    faceArea:'Upper', facePart:'Head', faceSection:'Head', continuumPair:'56', continuumDirection:'negative' },
+  '56': { id:'56', name:'Head Tilt Right',   faceArea:'Upper', facePart:'Head', faceSection:'Head', continuumPair:'55', continuumDirection:'positive' },
 };
 
 // --- Engine metadata helpers ---
@@ -365,6 +399,11 @@ export const HEAD_COMBINED_AXES = {
   horizontal: { left: 31, right: 32 },
   vertical: { up: 33, down: 54 },
 };
+
+/**
+ * Head roll (tilt) — single continuum mapping (Left↔Right tilt).
+ */
+export const HEAD_TILT_AXIS = { left: 55, right: 56 };
 
 /**
  * Which AUs have both morphs and bones (so they can blend between them).
