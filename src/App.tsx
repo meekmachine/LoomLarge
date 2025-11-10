@@ -73,13 +73,16 @@ export default function App() {
     ? "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://github.com/meekmachine/LoomLarge/releases/download/v1.0.0/jonathan.glb")
     : "/characters/jonathan.glb";
 
+  // Use BASE_URL for skybox to work with GitHub Pages base path
+  const skyboxUrl = import.meta.env.BASE_URL + "skyboxes/3BR2D07.jpg";
+
   return (
     <div className="fullscreen-scene">
       <CharacterGLBScene
         src={glbSrc}
         className="fullscreen-scene"
         cameraOverride={cameraOverride}
-        skyboxUrl="/skyboxes/3BR2D07.jpg"
+        skyboxUrl={skyboxUrl}
         onReady={handleReady}
       />
       <SliderDrawer isOpen={drawerOpen} onToggle={() => setDrawerOpen(!drawerOpen)} />
