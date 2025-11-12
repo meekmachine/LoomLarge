@@ -162,6 +162,13 @@ The intensity scale uses quadratic scaling (`scale^2`) for better control:
 
 This gives finer control at low intensities (where linear scaling would make small adjustments too coarse) and smooth amplification at high intensities.
 
+**Value Normalization:**
+Keyframe intensity values are automatically normalized to [0, 1] range:
+- Values ≤ 1.0 are used as-is (already normalized)
+- Values > 1.0 are divided by 100 (treat as percentages: 90 → 0.9)
+
+This ensures consistent behavior regardless of whether JSON files use percentage (0-100) or normalized (0-1) format.
+
 **Priority Resolution**:
 When multiple snippets control the same AU:
 1. Higher priority wins

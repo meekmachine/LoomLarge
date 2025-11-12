@@ -22,11 +22,24 @@ const applyIntensityScale = (rawValue: number, scale: number): number => {
   return rawValue * multiplier;
 };
 
+/**
+ * Normalize keyframe intensity values to [0, 1] range.
+ * Handles both 0-1 values and 0-100 percentage values.
+ */
+const normalizeIntensity = (value: number): number => {
+  // If value is > 1, assume it's in percentage (0-100) and divide by 100
+  // Otherwise use as-is (already in 0-1 range)
+  return value > 1 ? value / 100 : value;
+};
+
 export function normalize(sn: any): Snippet & { curves: Record<string, Array<{ time: number; intensity: number }>> } {
   if (sn && sn.curves) {
     const curves: Record<string, Array<{ time: number; intensity: number }>> = {};
     Object.entries<any[]>(sn.curves).forEach(([key, arr]) => {
-      curves[key] = arr.map((k: any) => ({ time: k.time ?? k.t ?? 0, intensity: k.intensity ?? k.v ?? 0 }));
+      curves[key] = arr.map((k: any) => ({
+        time: k.time ?? k.t ?? 0,
+        intensity: normalizeIntensity(k.intensity ?? k.v ?? 0)
+      }));
     });
     return {
       name: sn.name ?? `sn_${Date.now()}`,
@@ -42,11 +55,17 @@ export function normalize(sn: any): Snippet & { curves: Record<string, Array<{ t
   const curves: Record<string, Array<{ time: number; intensity: number }>> = {};
   (sn.au ?? []).forEach((k: any) => {
     const key = String(k.id);
-    (curves[key] ||= []).push({ time: k.t ?? k.time ?? 0, intensity: k.v ?? k.intensity ?? 0 });
+    (curves[key] ||= []).push({
+      time: k.t ?? k.time ?? 0,
+      intensity: normalizeIntensity(k.v ?? k.intensity ?? 0)
+    });
   });
   (sn.viseme ?? []).forEach((k: any) => {
     const key = String(k.key);
-    (curves[key] ||= []).push({ time: k.t ?? k.time ?? 0, intensity: k.v ?? k.intensity ?? 0 });
+    (curves[key] ||= []).push({
+      time: k.t ?? k.time ?? 0,
+      intensity: normalizeIntensity(k.v ?? k.intensity ?? 0)
+    });
   });
   Object.values(curves).forEach(arr => arr.sort((a, b) => a.time - b.time));
 
