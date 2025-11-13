@@ -13,7 +13,8 @@ import {
   EYE_MESH_CANDIDATES_RIGHT,
   HEAD_CTRL_CANDIDATES,
   BONE_DRIVEN_AUS,
-  EYE_AXIS
+  EYE_AXIS,
+  MIXED_AUS
 } from './arkit/shapeDict';
 
 const X_AXIS = new THREE.Vector3(1,0,0);
@@ -568,16 +569,21 @@ export class EngineThree {
     // For head and eye AUs that aren't left/right split, apply all keys directly
     const globalAUs = new Set([31, 32, 33, 54, 61, 62, 63, 64]);
     const keys = AU_TO_MORPHS[id] || [];
+
+    // For mixed AUs (both morph and bone), scale morph intensity by mix weight
+    const mixWeight = MIXED_AUS.has(id) ? this.getAUMixWeight(id) : 1.0;
+    const morphValue = v * mixWeight;
+
     if (globalAUs.has(id)) {
-      this.applyMorphs(keys, v);
+      this.applyMorphs(keys, morphValue);
     } else {
       const leftKeys = keys.filter(k => /(_L|Left)$/.test(k));
       const rightKeys = keys.filter(k => /(_R|Right)$/.test(k));
       if (leftKeys.length || rightKeys.length) {
-        this.applyMorphs(leftKeys, v);
-        this.applyMorphs(rightKeys, v);
+        this.applyMorphs(leftKeys, morphValue);
+        this.applyMorphs(rightKeys, morphValue);
       } else if (keys.length) {
-        this.applyMorphs(keys, v);
+        this.applyMorphs(keys, morphValue);
       }
     }
   };

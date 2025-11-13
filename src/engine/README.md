@@ -57,6 +57,12 @@ These AUs support **blend weights** (mix ratio) to control the balance between m
 - `0.0` = Pure bone movement (no morph overlay)
 - `1.0` = Full bone + full morph overlay (default)
 
+**Important**: For mixed AUs, the mix weight scales the **morph intensity** while bones are applied at full intensity. For example:
+- AU 26 (jaw) with mix weight 0.8:
+  - Morph (`Jaw_Open`) applied at 80% intensity
+  - Bone (`JAW` rotation) applied at 100% intensity
+  - This allows bone rotation to be visible while still having some morph deformation
+
 ## Engine Implementation (EngineThree.ts)
 
 ### Key Methods
