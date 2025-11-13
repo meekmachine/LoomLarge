@@ -148,6 +148,7 @@ export default function AUSection({
                 intensity={intensity}
                 muscularBasis={au.muscularBasis}
                 links={au.links}
+                engine={engine}
                 onChange={(val) => {
                   onAUChange?.(au.id, val);
                   engine?.setAU(au.id as any, val);

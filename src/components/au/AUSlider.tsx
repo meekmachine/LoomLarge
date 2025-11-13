@@ -8,8 +8,11 @@ import {
   Tooltip,
   Text,
   Image,
-  VStack
+  VStack,
+  HStack
 } from '@chakra-ui/react';
+import { EngineThree } from '../../engine/EngineThree';
+import { MIXED_AUS } from '../../engine/arkit/shapeDict';
 
 interface AUSliderProps {
   au: string | number;
@@ -18,11 +21,13 @@ interface AUSliderProps {
   onChange: (newIntensity: number) => void;
   muscularBasis?: string;
   links?: string[];
+  engine?: EngineThree; // Optional: for morph/bone blend control
 }
 
 /**
  * AUSlider - Controls Action Unit intensity from 0-1
  * Calls engine.setAU() directly via onChange callback
+ * For mixed AUs (morph + bone), displays an additional blend slider
  */
 const AUSlider: React.FC<AUSliderProps> = ({
   au,
@@ -30,11 +35,17 @@ const AUSlider: React.FC<AUSliderProps> = ({
   intensity,
   onChange,
   muscularBasis,
-  links
+  links,
+  engine
 }) => {
   const [showImageTooltip, setShowImageTooltip] = useState(false);
   const [showValueTooltip, setShowValueTooltip] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [mixValue, setMixValue] = useState<number>(1); // Default to 1 (full intensity)
+
+  // Check if this AU is a mixed AU (controls both morphs and bones)
+  const auId = typeof au === 'number' ? au : parseInt(String(au).replace(/[^\d]/g, ''));
+  const isMixedAU = MIXED_AUS.has(auId);
 
   // Color interpolation: teal (0) -> magenta (1)
   const getSliderColor = (value: number): string => {
@@ -78,63 +89,106 @@ const AUSlider: React.FC<AUSliderProps> = ({
     onChange(value);
   };
 
-  return (
-    <Box width="100%">
-      <Text mb="2" display="inline" fontSize="sm">
-        {`${au} - ${name}`}
-        {muscularBasis && (
-          <Tooltip
-            label={
-              <VStack align="start">
-                {muscularBasis.split(', ').map((muscle, i) => (
-                  imageUrls[i]
-                    ? <Image key={i} src={imageUrls[i]} alt={muscle} boxSize="100px" />
-                    : <Text key={i}>{muscle}</Text>
-                ))}
-              </VStack>
-            }
-            isOpen={showImageTooltip}
-            hasArrow
-          >
-            <Text
-              as="span"
-              fontSize="xs"
-              ml={2}
-              onMouseEnter={() => setShowImageTooltip(true)}
-              onMouseLeave={() => setShowImageTooltip(false)}
-              style={{ textDecoration: "underline", cursor: "pointer" }}
-            >
-              {muscularBasis}
-            </Text>
-          </Tooltip>
-        )}
-      </Text>
+  // Get current mix value from engine, or use local state
+  const getMix = () => {
+    if (engine && isMixedAU) {
+      return engine.getAUMixWeight(auId) ?? mixValue;
+    }
+    return mixValue;
+  };
 
-      <Slider
-        id={String(au)}
-        value={intensity}
-        min={0}
-        max={1}
-        step={0.01}
-        onChange={handleIntensityChange}
-        onMouseEnter={() => setShowValueTooltip(true)}
-        onMouseLeave={() => setShowValueTooltip(false)}
-      >
-        <SliderTrack>
-          <SliderFilledTrack bg={getSliderColor(intensity)} />
-        </SliderTrack>
-        <Tooltip
-          hasArrow
-          label={`${(intensity * 100).toFixed(0)}%`}
-          bg="gray.300"
-          color="black"
-          placement="top"
-          isOpen={showValueTooltip}
+  // Update mix weight in engine and local state
+  const handleMixChange = (v: number) => {
+    setMixValue(v);
+    if (engine && isMixedAU) {
+      engine.setAUMixWeight(auId, v);
+    }
+  };
+
+  return (
+    <VStack width="100%" align="stretch" spacing={2}>
+      <Box>
+        <Text mb="2" display="inline" fontSize="sm">
+          {`${au} - ${name}`}
+          {muscularBasis && (
+            <Tooltip
+              label={
+                <VStack align="start">
+                  {muscularBasis.split(', ').map((muscle, i) => (
+                    imageUrls[i]
+                      ? <Image key={i} src={imageUrls[i]} alt={muscle} boxSize="100px" />
+                      : <Text key={i}>{muscle}</Text>
+                  ))}
+                </VStack>
+              }
+              isOpen={showImageTooltip}
+              hasArrow
+            >
+              <Text
+                as="span"
+                fontSize="xs"
+                ml={2}
+                onMouseEnter={() => setShowImageTooltip(true)}
+                onMouseLeave={() => setShowImageTooltip(false)}
+                style={{ textDecoration: "underline", cursor: "pointer" }}
+              >
+                {muscularBasis}
+              </Text>
+            </Tooltip>
+          )}
+        </Text>
+
+        <Slider
+          id={String(au)}
+          value={intensity}
+          min={0}
+          max={1}
+          step={0.01}
+          onChange={handleIntensityChange}
+          onMouseEnter={() => setShowValueTooltip(true)}
+          onMouseLeave={() => setShowValueTooltip(false)}
         >
-          <SliderThumb boxSize={6} />
-        </Tooltip>
-      </Slider>
-    </Box>
+          <SliderTrack>
+            <SliderFilledTrack bg={getSliderColor(intensity)} />
+          </SliderTrack>
+          <Tooltip
+            hasArrow
+            label={`${(intensity * 100).toFixed(0)}%`}
+            bg="gray.300"
+            color="black"
+            placement="top"
+            isOpen={showValueTooltip}
+          >
+            <SliderThumb boxSize={6} />
+          </Tooltip>
+        </Slider>
+      </Box>
+
+      {/* Morph ↔ Bone blend slider (only for mixed AUs with bone bindings) */}
+      {isMixedAU && engine && (
+        <Box pt={2} borderTop="1px solid rgba(255,255,255,0.12)">
+          <HStack mb={1} justify="space-between">
+            <Text fontSize="xs" opacity={0.8}>Blend (Morph ↔ Bone)</Text>
+            <Text fontSize="xs" opacity={0.6}>
+              {getMix().toFixed(2)}
+            </Text>
+          </HStack>
+          <Slider
+            aria-label="morph-bone-blend"
+            min={0}
+            max={1}
+            step={0.01}
+            value={getMix()}
+            onChange={handleMixChange}
+          >
+            <SliderTrack>
+              <SliderFilledTrack />
+            </SliderTrack>
+            <SliderThumb boxSize={4} />
+          </Slider>
+        </Box>
+      )}
+    </VStack>
   );
 };
 
