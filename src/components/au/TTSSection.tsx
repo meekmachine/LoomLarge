@@ -305,26 +305,26 @@ export default function TTSSection({ engine, disabled = false }: TTSSectionProps
               console.log(`[Prosodic] Brow + tilt emphasis "${gestureName}"`);
             }
 
-            // Pattern 2: Head nod (every 4 words)
+            // Pattern 2: Head nod (every 4 words) - more pronounced
             else if (wordMod === 3) {
               const gestureTime = Date.now();
               const gestureName = `prosodic:nod_${gestureTime}`;
               anim.schedule({
                 name: gestureName,
                 curves: {
-                  '33': [ // Head turn up (AU33) - nod down motion
+                  '33': [ // Head turn up (AU33) - nod down motion (increased intensity)
                     { time: 0.0, intensity: 0 },
-                    { time: 0.2, intensity: 25 },
-                    { time: 0.5, intensity: 30 },
-                    { time: 0.8, intensity: 0 },
+                    { time: 0.15, intensity: 40 },  // Faster attack, higher intensity
+                    { time: 0.4, intensity: 50 },   // Higher peak
+                    { time: 0.75, intensity: 0 },   // Slightly longer duration
                   ],
                 },
-                maxTime: 0.8,
+                maxTime: 0.75,
                 loop: false,
                 snippetCategory: 'prosodic',
                 snippetPriority: 30,
                 snippetPlaybackRate: 1.0,
-                snippetIntensityScale: 0.7,
+                snippetIntensityScale: 0.9,  // Increased from 0.7 to 0.9
               });
               prosodicSnippetsRef.current.push(gestureName);
               console.log(`[Prosodic] Head nod "${gestureName}"`);
