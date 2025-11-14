@@ -4,11 +4,15 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
+import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
+import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
+import { EngineWind } from '../engine/EngineWind';
 
 export type CharacterReady = {
   scene: THREE.Scene;
   model: THREE.Object3D;
   meshes: THREE.Mesh[]; // meshes with morph targets (for facslib)
+  windEngine?: EngineWind; // wind physics engine for hair
 };
 
 type CameraOverride = {
@@ -75,11 +79,6 @@ export default function CharacterGLBScene({
             scene.environment = envMap;
             texture.dispose();
             pmremGenerator.dispose();
-            console.log('[CharacterGLBScene] HDR Skybox loaded:', skyboxUrl);
-          },
-          undefined,
-          (error) => {
-            console.error('[CharacterGLBScene] Failed to load HDR skybox:', error);
           }
         );
       } else {
@@ -92,11 +91,6 @@ export default function CharacterGLBScene({
             texture.colorSpace = THREE.SRGBColorSpace;
             scene.background = texture;
             scene.environment = texture;
-            console.log('[CharacterGLBScene] Image Skybox loaded:', skyboxUrl);
-          },
-          undefined,
-          (error) => {
-            console.error('[CharacterGLBScene] Failed to load image skybox:', error);
           }
         );
       }
@@ -128,7 +122,88 @@ export default function CharacterGLBScene({
     loader.setDRACOLoader(dracoLoader);
 
     let model: THREE.Object3D | null = null;
+    let windEngine: EngineWind | null = null;
     let raf = 0;
+    let loadingTextMesh: THREE.Mesh | null = null;
+    let mousePos = { x: 0, y: 0 };
+
+    // Mouse tracking for text wobble
+    const handleMouseMove = (event: MouseEvent) => {
+      mousePos.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mousePos.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+
+    // Create 3D loading text
+    const fontLoader = new FontLoader();
+    fontLoader.load(
+      import.meta.env.BASE_URL + 'fonts/helvetiker_bold.typeface.json',
+      (font) => {
+        const textGeometry = new TextGeometry('Loading Model', {
+          font: font,
+          size: 0.08, // Much smaller text
+          depth: 0.01, // Very thin
+          curveSegments: 4,
+          bevelEnabled: true,
+          bevelThickness: 0.003,
+          bevelSize: 0.002,
+          bevelSegments: 2,
+        });
+
+        const textMaterial = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 1.0,
+        });
+
+        loadingTextMesh = new THREE.Mesh(textGeometry, textMaterial);
+        textGeometry.center();
+        loadingTextMesh.position.set(0, 1.8, 0); // Position above where head will be
+        scene.add(loadingTextMesh);
+      },
+      undefined,
+      (error) => {
+        console.error('[CharacterGLBScene] Failed to load font:', error);
+      }
+    );
+
+    // Function to update loading text with progress
+    const updateLoadingText = (progress: number) => {
+      if (!loadingTextMesh) return;
+
+      // Remove old text
+      scene.remove(loadingTextMesh);
+      loadingTextMesh.geometry.dispose();
+      (loadingTextMesh.material as THREE.Material).dispose();
+
+      // Create new text with progress
+      fontLoader.load(
+        import.meta.env.BASE_URL + 'fonts/helvetiker_bold.typeface.json',
+        (font) => {
+          const textGeometry = new TextGeometry(`Loading ${progress}%`, {
+            font: font,
+            size: 0.08, // Much smaller text
+            depth: 0.01, // Very thin
+            curveSegments: 4,
+            bevelEnabled: true,
+            bevelThickness: 0.003,
+            bevelSize: 0.002,
+            bevelSegments: 2,
+          });
+
+          const textMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 1.0,
+          });
+
+          loadingTextMesh = new THREE.Mesh(textGeometry, textMaterial);
+          textGeometry.center();
+          loadingTextMesh.position.set(0, 1.8, 0); // Position above where head will be
+          scene.add(loadingTextMesh);
+        }
+      );
+    };
 
     loader.load(
       src,
@@ -186,88 +261,36 @@ export default function CharacterGLBScene({
           }
         });
 
-        // DEBUG: Log raw GLB structure for Character Creator inspection
-        console.group('🔍 [CharacterGLBScene] RAW GLB MODEL LOADED');
-        console.log('GLTF object:', gltf);
-        console.log('Model root:', model);
-
-        // Log all bones from skeleton
-        console.group('📋 SKELETON BONES');
-        const allBones: THREE.Bone[] = [];
-        model.traverse((obj) => {
-          if ((obj as any).isBone) {
-            allBones.push(obj as THREE.Bone);
-          }
-        });
-        console.log(`Total bones found: ${allBones.length}`);
-
-        // Categorize bones
-        const jawBones = allBones.filter(b => /jaw/i.test(b.name));
-        const headBones = allBones.filter(b => /head|neck/i.test(b.name));
-        const eyeBones = allBones.filter(b => /eye/i.test(b.name));
-
-        if (jawBones.length) {
-          console.log('🦴 JAW BONES:', jawBones.map(b => b.name));
-          console.log('🦴 JAW BONE OBJECTS:', jawBones);
+        // Initialize wind physics engine for hair
+        windEngine = new EngineWind(model);
+        if (windEngine.getHairBoneCount() > 0) {
+          console.log(`[CharacterGLBScene] Wind engine initialized with ${windEngine.getHairBoneCount()} hair bones:`,
+            windEngine.getHairBoneNames());
         } else {
-          console.warn('⚠️ NO JAW BONES FOUND!');
+          console.log('[CharacterGLBScene] No hair bones detected - wind physics disabled');
         }
 
-        if (headBones.length) {
-          console.log('🦴 HEAD/NECK BONES:', headBones.map(b => b.name));
+        // Remove loading text when model is ready
+        if (loadingTextMesh) {
+          scene.remove(loadingTextMesh);
+          loadingTextMesh.geometry.dispose();
+          (loadingTextMesh.material as THREE.Material).dispose();
+          loadingTextMesh = null;
         }
 
-        if (eyeBones.length) {
-          console.log('🦴 EYE BONES:', eyeBones.map(b => b.name));
-        }
-
-        console.log('🦴 ALL BONE NAMES:', allBones.map(b => b.name));
-        console.groupEnd();
-
-        // Log morph targets per mesh
-        console.group('🎭 MORPH TARGETS (BLENDSHAPES)');
-        console.log(`Total meshes with morphs: ${meshes.length}`);
-
-        meshes.forEach((mesh, idx) => {
-          const dict = (mesh as any).morphTargetDictionary;
-          if (dict) {
-            const allMorphNames = Object.keys(dict);
-
-            // Categorize morphs
-            const jawMorphs = allMorphNames.filter(n => /jaw/i.test(n));
-            const mouthMorphs = allMorphNames.filter(n => /mouth|lip/i.test(n));
-            const visemeMorphs = allMorphNames.filter(n => /^[A-Z]{1,3}$/.test(n) || /viseme/i.test(n));
-
-            console.group(`Mesh[${idx}] "${mesh.name}" (${allMorphNames.length} morphs)`);
-            console.log('morphTargetDictionary:', dict);
-            console.log('morphTargetInfluences:', mesh.morphTargetInfluences);
-
-            if (jawMorphs.length) {
-              console.log('👄 JAW MORPHS:', jawMorphs);
-            }
-            if (mouthMorphs.length) {
-              console.log('👄 MOUTH/LIP MORPHS:', mouthMorphs);
-            }
-            if (visemeMorphs.length) {
-              console.log('🗣️ VISEME MORPHS:', visemeMorphs);
-            }
-
-            console.log('📝 ALL MORPH NAMES (alphabetical):', allMorphNames.sort());
-            console.groupEnd();
-          }
-        });
-        console.groupEnd();
-
-        console.log('✅ Model loading complete - check logs above for bone/morph names');
-        console.groupEnd();
-
-        onReady?.({ scene, model, meshes });
+        onReady?.({ scene, model, meshes, windEngine: windEngine });
       },
       (progressEvent) => {
         // Calculate loading progress percentage
         if (progressEvent.lengthComputable) {
           const percentComplete = (progressEvent.loaded / progressEvent.total) * 100;
-          onProgress?.(Math.round(percentComplete));
+          const roundedProgress = Math.round(percentComplete);
+
+          // Update 3D loading text with progress
+          updateLoadingText(roundedProgress);
+
+          // Also call the onProgress callback
+          onProgress?.(roundedProgress);
         }
       },
       (err) => {
@@ -279,6 +302,35 @@ export default function CharacterGLBScene({
     const animate = () => {
       const dt = clock.getDelta();
       if (autoRotate && model) model.rotation.y += 0.2 * dt;
+
+      // Update wind physics
+      if (windEngine) {
+        windEngine.update(dt);
+      }
+
+      // Animate loading text with wobble
+      if (loadingTextMesh) {
+        const time = Date.now() * 0.001;
+
+        // Base wobble
+        const wobbleX = Math.sin(time * 1.5) * 0.02;
+        const wobbleY = Math.cos(time * 1.2) * 0.02;
+        const wobbleZ = Math.sin(time * 0.8) * 0.01;
+
+        // Mouse influence
+        const mouseInfluence = 0.05;
+        const mouseWobbleX = mousePos.x * mouseInfluence;
+        const mouseWobbleY = mousePos.y * mouseInfluence;
+
+        loadingTextMesh.rotation.x = wobbleX + mouseWobbleY;
+        loadingTextMesh.rotation.y = wobbleY + mouseWobbleX;
+        loadingTextMesh.rotation.z = wobbleZ;
+
+        // Subtle pulse effect
+        const pulse = Math.sin(time * 2) * 0.05 + 0.95;
+        loadingTextMesh.scale.setScalar(pulse);
+      }
+
       controls.update();
       renderer.render(scene, camera);
       raf = requestAnimationFrame(animate);
@@ -298,6 +350,15 @@ export default function CharacterGLBScene({
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('mousemove', handleMouseMove);
+
+      // Clean up loading text if still present
+      if (loadingTextMesh) {
+        scene.remove(loadingTextMesh);
+        loadingTextMesh.geometry.dispose();
+        (loadingTextMesh.material as THREE.Material).dispose();
+      }
+
       if (model) scene.remove(model);
       controls.dispose();
       renderer.dispose();

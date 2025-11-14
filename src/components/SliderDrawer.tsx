@@ -17,6 +17,8 @@ import {
 import { FaBars } from 'react-icons/fa';
 import { AU_INFO, AUInfo } from '../engine/arkit/shapeDict';
 import AUSection from './au/AUSection';
+import VisemeSection from './au/VisemeSection';
+import WindSection from './au/WindSection';
 import DockableAccordionItem from './au/DockableAccordionItem';
 import PlaybackControls from './PlaybackControls';
 import { useThreeState } from '../context/threeContext';
@@ -24,13 +26,15 @@ import { useThreeState } from '../context/threeContext';
 interface SliderDrawerProps {
   isOpen: boolean;
   onToggle: () => void;
+  disabled?: boolean;
 }
 
-export default function SliderDrawer({ isOpen, onToggle }: SliderDrawerProps) {
-  const { engine } = useThreeState();
+export default function SliderDrawer({ isOpen, onToggle, disabled = false }: SliderDrawerProps) {
+  const { engine, windEngine } = useThreeState();
 
   // Track AU intensities in local state for UI
   const [auStates, setAuStates] = useState<Record<string, number>>({});
+  const [visemeStates, setVisemeStates] = useState<Record<string, number>>({});
   const [showUnusedSliders, setShowUnusedSliders] = useState(false);
   const [segmentationMode, setSegmentationMode] = useState<'facePart' | 'faceArea'>('facePart');
 
@@ -58,11 +62,7 @@ export default function SliderDrawer({ isOpen, onToggle }: SliderDrawerProps) {
     if (showUnusedSliders) return entries;
     return entries.filter(([_, aus]) => {
       // Check if any AU in this section has a value > 0
-      const hasActiveAU = aus.some(au => (auStates[au.id] ?? 0) > 0);
-      // Check if any AU in this section is part of a continuum pair
-      const hasContinuumPairs = aus.some(au => au.continuumPair);
-      // Show section if it has active AUs OR has continuum controls
-      return hasActiveAU || hasContinuumPairs;
+      return aus.some(au => (auStates[au.id] ?? 0) > 0);
     });
   }, [auGroups, auStates, showUnusedSliders]);
 
@@ -74,11 +74,17 @@ export default function SliderDrawer({ isOpen, onToggle }: SliderDrawerProps) {
     });
     // Clear local state
     setAuStates({});
+    setVisemeStates({});
   };
 
   // Handle AU changes
   const handleAUChange = (id: string, value: number) => {
     setAuStates(prev => ({ ...prev, [id]: value }));
+  };
+
+  // Handle Viseme changes
+  const handleVisemeChange = (key: string, value: number) => {
+    setVisemeStates(prev => ({ ...prev, [key]: value }));
   };
 
   return (
@@ -143,7 +149,21 @@ export default function SliderDrawer({ isOpen, onToggle }: SliderDrawerProps) {
                 <PlaybackControls />
               </DockableAccordionItem>
 
-              {/* AU Sections (includes continuum controls for Eyes and Head) */}
+              {/* Wind Physics Section */}
+              <WindSection
+                windEngine={windEngine}
+                disabled={disabled}
+              />
+
+              {/* Viseme Section */}
+              <VisemeSection
+                engine={engine}
+                visemeStates={visemeStates}
+                onVisemeChange={handleVisemeChange}
+                disabled={disabled}
+              />
+
+              {/* AU Sections (continuum sliders appear inline with their sections) */}
               {filteredSections.map(([section, aus]) => (
                 <AUSection
                   key={section}
@@ -153,6 +173,7 @@ export default function SliderDrawer({ isOpen, onToggle }: SliderDrawerProps) {
                   engine={engine}
                   showUnusedSliders={showUnusedSliders}
                   onAUChange={handleAUChange}
+                  disabled={disabled}
                 />
               ))}
             </Accordion>

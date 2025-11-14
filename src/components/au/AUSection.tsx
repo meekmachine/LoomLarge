@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
-import { VStack, Box, Text, Divider } from '@chakra-ui/react';
+import React from 'react';
+import { VStack, Box } from '@chakra-ui/react';
 import DockableAccordionItem from './DockableAccordionItem';
 import AUSlider from './AUSlider';
 import ContinuumSlider from './ContinuumSlider';
-import { AUInfo } from '../../engine/arkit/shapeDict';
+import { AUInfo, CONTINUUM_PAIRS } from '../../engine/arkit/shapeDict';
 import { EngineThree } from '../../engine/EngineThree';
 
 interface AUSectionProps {
@@ -13,13 +13,12 @@ interface AUSectionProps {
   engine?: EngineThree;
   showUnusedSliders?: boolean;
   onAUChange?: (id: string, value: number) => void;
+  disabled?: boolean;
 }
 
 /**
- * AUSection - Groups AUs into collapsible sections
- * Shows continuum sliders for paired AUs (based on continuumPair metadata)
- * Shows regular sliders for unpaired AUs
- * EngineThree automatically handles blendshape + bone logic
+ * AUSection - Renders AU sliders for a section
+ * Shows continuum sliders for paired AUs, individual sliders for others
  */
 export default function AUSection({
   section,
@@ -27,117 +26,132 @@ export default function AUSection({
   auStates,
   engine,
   showUnusedSliders = false,
-  onAUChange
+  onAUChange,
+  disabled = false
 }: AUSectionProps) {
-  // Group AUs into continuum pairs and singles
-  const { continuumPairs, singleAUs } = useMemo(() => {
-    const pairs: Array<{ negative: AUInfo; positive: AUInfo }> = [];
-    const processed = new Set<string>();
-    const singles: AUInfo[] = [];
+  // Build a map of AU ID to continuum pair info
+  const continuumMap = new Map<number, { pair: typeof CONTINUUM_PAIRS[0]; isNegative: boolean }>();
+  CONTINUUM_PAIRS.forEach(pair => {
+    continuumMap.set(pair.negative, { pair, isNegative: true });
+    continuumMap.set(pair.positive, { pair, isNegative: false });
+  });
 
-    aus.forEach((au) => {
-      if (processed.has(au.id)) return;
-
-      if (au.continuumPair && au.continuumDirection) {
-        const pairAU = aus.find(a => a.id === au.continuumPair);
-        if (pairAU) {
-          processed.add(au.id);
-          processed.add(pairAU.id);
-
-          if (au.continuumDirection === 'negative') {
-            pairs.push({ negative: au, positive: pairAU });
-          } else {
-            pairs.push({ negative: pairAU, positive: au });
-          }
-        } else {
-          singles.push(au);
-        }
-      } else {
-        singles.push(au);
-      }
-    });
-
-    return { continuumPairs: pairs, singleAUs: singles };
-  }, [aus]);
-
-  const hasContinuum = continuumPairs.length > 0;
-  const hasSingles = singleAUs.length > 0;
+  // Track which AUs we've already rendered as part of a continuum
+  const renderedAUs = new Set<string>();
 
   return (
     <DockableAccordionItem title={section}>
       <VStack spacing={4} mt={2} align="stretch">
-        {/* Continuum sliders */}
-        {hasContinuum && (
-          <>
-            {continuumPairs.map((pair) => {
-              const negValue = auStates[pair.negative.id] ?? 0;
-              const posValue = auStates[pair.positive.id] ?? 0;
-              const continuumValue = posValue - negValue;
+        {aus.map((au) => {
+          const auNum = parseInt(au.id);
 
-              // Determine which continuum helper to call based on AU IDs
-              const isEyesHorizontal = pair.negative.id === '61' && pair.positive.id === '62';
-              const isEyesVertical = pair.negative.id === '64' && pair.positive.id === '63';
-              const isHeadHorizontal = pair.negative.id === '31' && pair.positive.id === '32';
-              const isHeadVertical = pair.negative.id === '54' && pair.positive.id === '33';
-              const isHeadTilt = pair.negative.id === '55' && pair.positive.id === '56';
+          // Skip if already rendered as part of a continuum pair
+          if (renderedAUs.has(au.id)) return null;
 
-              // Show blend slider for eyes and head continua
-              const showBlend = isEyesHorizontal || isEyesVertical || isHeadHorizontal || isHeadVertical || isHeadTilt;
+          // Check if this AU is part of a continuum pair
+          const continuumInfo = continuumMap.get(auNum);
+
+          if (continuumInfo) {
+            // Find the paired AU
+            const { pair, isNegative } = continuumInfo;
+            const pairedAUId = isNegative ? pair.positive : pair.negative;
+            const pairedAU = aus.find(a => parseInt(a.id) === pairedAUId);
+
+            if (!pairedAU) {
+              // Pair not in this section, render as individual
+              const intensity = auStates[au.id] ?? 0;
+              if (!showUnusedSliders && intensity <= 0) return null;
 
               return (
-                <Box key={`${pair.negative.id}-${pair.positive.id}`} w="100%">
-                  <ContinuumSlider
-                    negativeAU={pair.negative}
-                    positiveAU={pair.positive}
-                    value={continuumValue}
+                <Box key={au.id} w="100%">
+                  <AUSlider
+                    au={au.id}
+                    name={au.name}
+                    intensity={intensity}
+                    muscularBasis={au.muscularBasis}
+                    links={au.links}
                     engine={engine}
-                    showBlendSlider={showBlend}
+                    disabled={disabled}
                     onChange={(val) => {
-                      // Update local state
-                      if (val >= 0) {
-                        onAUChange?.(pair.positive.id, val);
-                        onAUChange?.(pair.negative.id, 0);
-                      } else {
-                        onAUChange?.(pair.negative.id, -val);
-                        onAUChange?.(pair.positive.id, 0);
-                      }
-
-                      // Call the appropriate EngineThree helper method
-                      // These methods handle BOTH morphs AND bones automatically
-                      if (isEyesHorizontal) {
-                        engine?.setEyesHorizontal(val);
-                      } else if (isEyesVertical) {
-                        engine?.setEyesVertical(val);
-                      } else if (isHeadHorizontal) {
-                        engine?.setHeadHorizontal(val);
-                      } else if (isHeadVertical) {
-                        engine?.setHeadVertical(val);
-                      } else if (isHeadTilt) {
-                        engine?.setHeadTilt(val);
-                      }
+                      onAUChange?.(au.id, val);
+                      engine?.setAU(au.id as any, val);
                     }}
                   />
                 </Box>
               );
-            })}
-          </>
-        )}
+            }
 
-        {/* Divider between continuum and singles */}
-        {hasContinuum && hasSingles && (
-          <>
-            <Divider />
-            <Text fontSize="xs" fontWeight="semibold" opacity={0.7}>
-              Individual Controls
-            </Text>
-          </>
-        )}
+            // Mark both AUs as rendered
+            renderedAUs.add(au.id);
+            renderedAUs.add(pairedAU.id);
 
-        {/* Individual AU sliders */}
-        {singleAUs.map((au) => {
+            // Render continuum slider
+            const negativeAU = isNegative ? au : pairedAU;
+            const positiveAU = isNegative ? pairedAU : au;
+            const negValue = auStates[negativeAU.id] ?? 0;
+            const posValue = auStates[positiveAU.id] ?? 0;
+            const continuumValue = posValue - negValue;
+
+            // Determine which continuum helper to call
+            const isEyesHorizontal = pair.negative === 61 && pair.positive === 62;
+            const isEyesVertical = pair.negative === 64 && pair.positive === 63;
+            const isHeadHorizontal = pair.negative === 31 && pair.positive === 32;
+            const isHeadVertical = pair.negative === 54 && pair.positive === 33;
+            const isHeadTilt = pair.negative === 55 && pair.positive === 56;
+            const isJawHorizontal = pair.negative === 30 && pair.positive === 35;
+
+            return (
+              <Box key={`${pair.negative}-${pair.positive}`} w="100%">
+                <ContinuumSlider
+                  negativeAU={negativeAU}
+                  positiveAU={positiveAU}
+                  value={continuumValue}
+                  engine={engine}
+                  showBlendSlider={pair.showBlend}
+                  disabled={disabled}
+                  onChange={(val) => {
+                    // Update local state
+                    if (val >= 0) {
+                      onAUChange?.(positiveAU.id, val);
+                      onAUChange?.(negativeAU.id, 0);
+                    } else {
+                      onAUChange?.(negativeAU.id, -val);
+                      onAUChange?.(positiveAU.id, 0);
+                    }
+
+                    // Call the appropriate engine helper
+                    if (isEyesHorizontal) {
+                      engine?.setEyesHorizontal(val);
+                    } else if (isEyesVertical) {
+                      engine?.setEyesVertical(val);
+                    } else if (isHeadHorizontal) {
+                      engine?.setHeadHorizontal(val);
+                    } else if (isHeadVertical) {
+                      engine?.setHeadVertical(val);
+                    } else if (isHeadTilt) {
+                      engine?.setHeadTilt(val);
+                    } else if (isJawHorizontal) {
+                      const mixWeight = engine?.getAUMixWeight(30) ?? 1.0;
+                      const morphWeight = 1.0 - mixWeight;
+
+                      if (val >= 0) {
+                        engine?.setMorph('Jaw_R', val * morphWeight);
+                        engine?.setMorph('Jaw_L', 0);
+                        engine?.setAU(35, val);
+                      } else {
+                        engine?.setMorph('Jaw_L', -val * morphWeight);
+                        engine?.setMorph('Jaw_R', 0);
+                        engine?.setAU(30, -val);
+                      }
+                    }
+                  }}
+                />
+              </Box>
+            );
+          }
+
+          // Regular individual AU slider
           const intensity = auStates[au.id] ?? 0;
-
-          // If hiding unused sliders, skip those still at zero
           if (!showUnusedSliders && intensity <= 0) return null;
 
           return (
@@ -149,9 +163,22 @@ export default function AUSection({
                 muscularBasis={au.muscularBasis}
                 links={au.links}
                 engine={engine}
+                disabled={disabled}
                 onChange={(val) => {
                   onAUChange?.(au.id, val);
-                  engine?.setAU(au.id as any, val);
+
+                  // Handle jaw AUs (25, 26, 27) like visemes
+                  const auNum = parseInt(au.id);
+                  if (auNum === 25 || auNum === 26 || auNum === 27) {
+                    engine?.setMorph('Jaw_Open', val);
+                    if (auNum === 27) {
+                      engine?.setMorph('Mouth_Stretch_L', val);
+                      engine?.setMorph('Mouth_Stretch_R', val);
+                    }
+                    engine?.setAU(auNum, val);
+                  } else {
+                    engine?.setAU(au.id as any, val);
+                  }
                 }}
               />
             </Box>

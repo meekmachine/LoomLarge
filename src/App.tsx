@@ -9,7 +9,7 @@ import { Text } from '@chakra-ui/react';
 import { AU_TO_MORPHS } from './engine/arkit/shapeDict';
 
 export default function App() {
-  const { engine, anim } = useThreeState();
+  const { engine, anim, setWindEngine } = useThreeState();
 
   const [auditSummary, setAuditSummary] = useState<{ morphCount:number; totalAUs:number; fullCovered:number; partial:number; zero:number } | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -53,8 +53,18 @@ export default function App() {
   }
 
   const handleReady = useCallback(
-    ({ meshes, model }: { meshes: any[]; model?: any }) => {
+    ({ meshes, model, windEngine }: { meshes: any[]; model?: any; windEngine?: any }) => {
       engine.onReady({ meshes, model });
+
+      // Set wind engine in context if available
+      if (windEngine) {
+        setWindEngine(windEngine);
+        // Expose wind engine globally for debugging
+        if (typeof window !== 'undefined') {
+          (window as any).windEngine = windEngine;
+        }
+      }
+
       try {
         const summary = auditMorphCoverage(model);
         setAuditSummary(summary);
@@ -62,7 +72,7 @@ export default function App() {
       anim?.play?.();
       setIsLoading(false);
     },
-    [engine, anim]
+    [engine, anim, setWindEngine]
   );
 
   const handleProgress = useCallback((progress: number) => {
@@ -95,7 +105,11 @@ export default function App() {
         onReady={handleReady}
         onProgress={handleProgress}
       />
-      <SliderDrawer isOpen={drawerOpen} onToggle={() => setDrawerOpen(!drawerOpen)} />
+      <SliderDrawer
+        isOpen={drawerOpen}
+        onToggle={() => setDrawerOpen(!drawerOpen)}
+        disabled={isLoading}
+      />
     </div>
   );
 }

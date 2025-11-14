@@ -32,9 +32,9 @@ export const AU_TO_MORPHS: Record<number, string[]> = {
   22: ['Mouth_Funnel'],
   23: ['Mouth_Press_L','Mouth_Press_R'],
   24: ['Mouth_Press_L','Mouth_Press_R'],
-  25: ['Jaw_Open','Mouth_Close'],
-  26: ['Jaw_Open'],
-  27: ['Jaw_Open'],
+  25: [],  // Lips Part - BONE ONLY (apply Jaw_Open morph separately if needed)
+  26: [],  // Jaw Drop - BONE ONLY (visemes apply their own morphs, then call this for bone rotation)
+  27: [],  // Mouth Stretch - BONE ONLY (apply morphs separately)
   28: ['Mouth_Roll_In_Upper','Mouth_Roll_In_Lower'],
 
   // Tongue
@@ -43,7 +43,8 @@ export const AU_TO_MORPHS: Record<number, string[]> = {
 
   // Jaw / Head (convenience)
   29: ['Jaw_Forward'],
-  30: ['Jaw_L','Jaw_R'],
+  30: [],  // Jaw Left - BONE ONLY (apply Jaw_L morph separately if needed)
+  35: [],  // Jaw Right - BONE ONLY (apply Jaw_R morph separately if needed)
   31: ['Head_Turn_L'],
   32: ['Head_Turn_R'],
   33: ['Head_Turn_Up'],
@@ -223,24 +224,27 @@ export const BONE_AU_TO_BINDINGS: Record<number, BoneBinding[]> = {
 
   // Jaw
   25: [ // Lips Part — small jaw open
-    { node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 8 },
+    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 5.84 },  // 73% of 8
   ],
   26: [
-    { node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 20 },
+    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 14.6 },  // 73% of 20
   ],
   27: [ // Mouth Stretch — larger jaw open
-    { node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 25 },
+    { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 18.25 }, // 73% of 25
   ],
   29: [
     { node: 'JAW', channel: 'tz', scale: 1, maxUnits: 0.01 },
   ],
-  30: [
-    { node: 'JAW', channel: 'tx', scale: 1, maxUnits: 0.006 },
+  30: [ // Jaw Left
+    { node: 'JAW', channel: 'ry', scale: -1, maxDegrees: 5 },
+  ],
+  35: [ // Jaw Right
+    { node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 5 },
   ],
 
   // Tongue
   19: [
-    { node: 'TONGUE', channel: 'tz', scale: 1, maxUnits: 0.008 },
+    { node: 'TONGUE', channel: 'tz', scale: -1, maxUnits: 0.008 },
   ],
 };
 
@@ -254,7 +258,7 @@ export const EYE_BONE_CANDIDATES_RIGHT: string[] = [
 
 export const HEAD_BONE_CANDIDATES:  string[] = ['Head','CC_Base_Head','Head_001','HeadBone','HeadCtrl'];
 export const NECK_BONE_CANDIDATES:  string[] = ['Neck','CC_Base_Neck','Neck1','Neck_01','NeckTwist','CC_Base_NeckTwist01','CC_Base_NeckTwist02'];
-export const JAW_BONE_CANDIDATES:   string[] = ['Jaw','CC_Base_Jaw','Mandible','LowerJaw','JawRoot','CC_Base_JawRoot','CC_Base_UpperJaw'];
+export const JAW_BONE_CANDIDATES:   string[] = ['CC_Base_JawRoot','JawRoot','Jaw','CC_Base_Jaw','Mandible','LowerJaw','CC_Base_UpperJaw'];
 export const TONGUE_BONE_CANDIDATES:string[] = ['Tongue','CC_Base_Tongue','Tongue_Base','Tongue01','Tongue_Tip'];
 
 // For rigs that expose eyes/head as meshes (not bones)
@@ -272,10 +276,6 @@ export interface AUInfo {
   faceArea?: 'Upper' | 'Lower'; // macro region
   facePart?: 'Forehead' | 'Brow' | 'Eyelids' | 'Eyes' | 'Nose' | 'Cheeks' | 'Mouth' | 'Chin' | 'Jaw' | 'Head' | 'Tongue' | 'Other';
   faceSection?: string; // back-compat (mirror of facePart)
-  /** If this AU is part of a bidirectional continuum, specify the opposite AU ID */
-  continuumPair?: string;
-  /** Direction in the continuum: 'negative' or 'positive' */
-  continuumDirection?: 'negative' | 'positive';
 }
 
 export const AU_INFO: Record<string, AUInfo> = {
@@ -289,10 +289,10 @@ export const AU_INFO: Record<string, AUInfo> = {
   '6':  { id:'6',  name:'Cheek Raiser',      muscularBasis:'orbicularis oculi (pars orbitalis)', links:['https://en.wikipedia.org/wiki/Orbicularis_oculi'], faceArea:'Upper', facePart:'Cheeks', faceSection:'Cheeks' },
   '7':  { id:'7',  name:'Lid Tightener',     muscularBasis:'orbicularis oculi (pars palpebralis)', links:['https://en.wikipedia.org/wiki/Orbicularis_oculi'], faceArea:'Upper', facePart:'Eyelids', faceSection:'Eyelids' },
   '43': { id:'43', name:'Eyes Closed',       muscularBasis:'orbicularis oculi', links:['https://en.wikipedia.org/wiki/Orbicularis_oculi_muscle'], faceArea:'Upper', facePart:'Eyelids', faceSection:'Eyelids' },
-  '61': { id:'61', name:'Eyes Turn Left',    faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes', continuumPair:'62', continuumDirection:'negative' },
-  '62': { id:'62', name:'Eyes Turn Right',   faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes', continuumPair:'61', continuumDirection:'positive' },
-  '63': { id:'63', name:'Eyes Up',           faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes', continuumPair:'64', continuumDirection:'positive' },
-  '64': { id:'64', name:'Eyes Down',         faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes', continuumPair:'63', continuumDirection:'negative' },
+  '61': { id:'61', name:'Eyes Turn Left',    faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes' },
+  '62': { id:'62', name:'Eyes Turn Right',   faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes' },
+  '63': { id:'63', name:'Eyes Up',           faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes' },
+  '64': { id:'64', name:'Eyes Down',         faceArea:'Upper', facePart:'Eyes', faceSection:'Eyes' },
 
   // Nose / Cheeks
   '9':  { id:'9',  name:'Nose Wrinkler',     muscularBasis:'levator labii superioris alaeque nasi', links:['https://en.wikipedia.org/wiki/Levator_labii_superioris_alaeque_nasi'], faceArea:'Upper', facePart:'Nose', faceSection:'Nose' },
@@ -324,15 +324,16 @@ export const AU_INFO: Record<string, AUInfo> = {
   // Jaw (Lower)
   '26': { id:'26', name:'Jaw Drop',          muscularBasis:'masseter (relax temporalis)', links:['https://en.wikipedia.org/wiki/Masseter_muscle'], faceArea:'Lower', facePart:'Jaw', faceSection:'Jaw' },
   '29': { id:'29', name:'Jaw Thrust',        faceArea:'Lower', facePart:'Jaw', faceSection:'Jaw' },
-  '30': { id:'30', name:'Jaw Sideways',      faceArea:'Lower', facePart:'Jaw', faceSection:'Jaw' },
+  '30': { id:'30', name:'Jaw Left',          faceArea:'Lower', facePart:'Jaw', faceSection:'Jaw' },
+  '35': { id:'35', name:'Jaw Right',         faceArea:'Lower', facePart:'Jaw', faceSection:'Jaw' },
 
   // Head (Upper, convenience)
-  '31': { id:'31', name:'Head Turn Left',    faceArea:'Upper', facePart:'Head', faceSection:'Head', continuumPair:'32', continuumDirection:'negative' },
-  '32': { id:'32', name:'Head Turn Right',   faceArea:'Upper', facePart:'Head', faceSection:'Head', continuumPair:'31', continuumDirection:'positive' },
-  '33': { id:'33', name:'Head Up',           faceArea:'Upper', facePart:'Head', faceSection:'Head', continuumPair:'54', continuumDirection:'positive' },
-  '54': { id:'54', name:'Head Down',         faceArea:'Upper', facePart:'Head', faceSection:'Head', continuumPair:'33', continuumDirection:'negative' },
-  '55': { id:'55', name:'Head Tilt Left',    faceArea:'Upper', facePart:'Head', faceSection:'Head', continuumPair:'56', continuumDirection:'negative' },
-  '56': { id:'56', name:'Head Tilt Right',   faceArea:'Upper', facePart:'Head', faceSection:'Head', continuumPair:'55', continuumDirection:'positive' },
+  '31': { id:'31', name:'Head Turn Left',    faceArea:'Upper', facePart:'Head', faceSection:'Head' },
+  '32': { id:'32', name:'Head Turn Right',   faceArea:'Upper', facePart:'Head', faceSection:'Head' },
+  '33': { id:'33', name:'Head Up',           faceArea:'Upper', facePart:'Head', faceSection:'Head' },
+  '54': { id:'54', name:'Head Down',         faceArea:'Upper', facePart:'Head', faceSection:'Head' },
+  '55': { id:'55', name:'Head Tilt Left',    faceArea:'Upper', facePart:'Head', faceSection:'Head' },
+  '56': { id:'56', name:'Head Tilt Right',   faceArea:'Upper', facePart:'Head', faceSection:'Head' },
 };
 
 // --- Engine metadata helpers ---
@@ -344,7 +345,7 @@ export const AU_INFO: Record<string, AUInfo> = {
 export const BONE_DRIVEN_AUS = new Set([
   31, 32, 33, 54, 55, 56, // head turn/tilt (left, right, up, down, tilt left, tilt right)
   61, 62, 63, 64, // eyes (left, right, up, down)
-  25, 26, 27, 29, 30 // jaw (lips part, jaw drop, mouth stretch, jaw forward, jaw sideways)
+  25, 26, 27, 29, 30, 35 // jaw (lips part, jaw drop, mouth stretch, jaw forward, jaw left, jaw right)
 ]);
 
 /**
@@ -376,6 +377,37 @@ export const HEAD_COMBINED_AXES = {
  * Head roll (tilt) — single continuum mapping (Left↔Right tilt).
  */
 export const HEAD_TILT_AXIS = { left: 55, right: 56 };
+
+/**
+ * Jaw horizontal — single continuum mapping (Left↔Right).
+ */
+export const JAW_HORIZONTAL_AXIS = { left: 30, right: 35 };
+
+/**
+ * All continuum pairs for bidirectional sliders.
+ * Each pair specifies the negative (left/down) and positive (right/up) AU IDs.
+ */
+export const CONTINUUM_PAIRS: Array<{ negative: number; positive: number; showBlend: boolean }> = [
+  // Eyes
+  { negative: 61, positive: 62, showBlend: true },  // Eyes Left ↔ Right
+  { negative: 64, positive: 63, showBlend: true },  // Eyes Down ↔ Up
+
+  // Head
+  { negative: 31, positive: 32, showBlend: true },  // Head Turn Left ↔ Right
+  { negative: 54, positive: 33, showBlend: true },  // Head Down ↔ Up
+  { negative: 55, positive: 56, showBlend: true },  // Head Tilt Left ↔ Right
+
+  // Jaw
+  { negative: 30, positive: 35, showBlend: true },  // Jaw Left ↔ Right
+];
+
+/**
+ * Set of all AU IDs that are part of continuum pairs.
+ * Used to filter them out from individual AU sliders.
+ */
+export const CONTINUUM_AU_IDS = new Set(
+  CONTINUUM_PAIRS.flatMap(pair => [pair.negative, pair.positive])
+);
 
 /**
  * Which AUs have both morphs and bones (so they can blend between them).

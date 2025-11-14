@@ -20,6 +20,7 @@ interface ContinuumSliderProps {
   onChange: (value: number) => void;
   engine?: EngineThree; // Optional: for morph/bone blend control
   showBlendSlider?: boolean; // Whether to show the morph/bone blend slider
+  disabled?: boolean;
 }
 
 /**
@@ -33,7 +34,8 @@ const ContinuumSlider: React.FC<ContinuumSliderProps> = ({
   value,
   onChange,
   engine,
-  showBlendSlider = false
+  showBlendSlider = false,
+  disabled = false
 }) => {
   const [showTooltip, setShowTooltip] = useState(false);
   const [mixValue, setMixValue] = useState<number>(1); // Default to 1 (full bone)
@@ -101,6 +103,7 @@ const ContinuumSlider: React.FC<ContinuumSliderProps> = ({
           min={-1}
           max={1}
           step={0.01}
+          isDisabled={disabled}
           onChange={onChange}
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
@@ -136,6 +139,7 @@ const ContinuumSlider: React.FC<ContinuumSliderProps> = ({
             max={1}
             step={0.01}
             value={getMix()}
+            isDisabled={disabled}
             onChange={handleMixChange}
           >
             <SliderTrack>

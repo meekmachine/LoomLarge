@@ -22,6 +22,7 @@ interface AUSliderProps {
   muscularBasis?: string;
   links?: string[];
   engine?: EngineThree; // Optional: for morph/bone blend control
+  disabled?: boolean;
 }
 
 /**
@@ -36,7 +37,8 @@ const AUSlider: React.FC<AUSliderProps> = ({
   onChange,
   muscularBasis,
   links,
-  engine
+  engine,
+  disabled = false
 }) => {
   const [showImageTooltip, setShowImageTooltip] = useState(false);
   const [showValueTooltip, setShowValueTooltip] = useState(false);
@@ -144,6 +146,7 @@ const AUSlider: React.FC<AUSliderProps> = ({
           min={0}
           max={1}
           step={0.01}
+          isDisabled={disabled}
           onChange={handleIntensityChange}
           onMouseEnter={() => setShowValueTooltip(true)}
           onMouseLeave={() => setShowValueTooltip(false)}
@@ -179,6 +182,7 @@ const AUSlider: React.FC<AUSliderProps> = ({
             max={1}
             step={0.01}
             value={getMix()}
+            isDisabled={disabled}
             onChange={handleMixChange}
           >
             <SliderTrack>

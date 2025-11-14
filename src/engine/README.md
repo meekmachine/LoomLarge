@@ -269,3 +269,104 @@ engine/
 │   └── README.md               # This file
 └── README.md                   # Engine overview (this file)
 ```
+
+---
+
+## Troubleshooting: Jaw Bone Animation
+
+### Current Issue (2025-11-13)
+
+Jaw bone rotation (AU 25, 26, 27) is not visibly rotating despite having correct bone bindings configured.
+
+### Model Details (Character Creator Format)
+
+**Confirmed GLB Structure:**
+- **Jaw bone:** `CC_Base_JawRoot` (skeleton index 40)
+- **Parent bone:** `CC_Base_Head` (skeleton index 38)
+- **Jaw morphs:** `Jaw_Open` (index 77), `Jaw_Forward`, `Jaw_L`, `Jaw_R`
+
+### Current Configuration
+
+**Bone Candidates ([shapeDict.ts:257](arkit/shapeDict.ts#L257)):**
+```typescript
+JAW_BONE_CANDIDATES = [
+  'CC_Base_JawRoot',  // ✅ Updated to prioritize CC rig format
+  'JawRoot', 'Jaw', 'CC_Base_Jaw', 'Mandible', 'LowerJaw', 'CC_Base_UpperJaw'
+];
+```
+
+**Bone Bindings ([shapeDict.ts:225-233](arkit/shapeDict.ts#L225-L233)):**
+```typescript
+25: [ { node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 8 } ],   // Lips Part
+26: [ { node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 20 } ],  // Jaw Drop
+27: [ { node: 'JAW', channel: 'ry', scale: 1, maxDegrees: 25 } ],  // Mouth Stretch
+```
+
+**Morph Mappings ([shapeDict.ts:35-37](arkit/shapeDict.ts#L35-L37)):**
+```typescript
+25: ['Jaw_Open','Mouth_Close'],
+26: ['Jaw_Open'],
+27: ['Jaw_Open'],
+```
+
+### Debug Console Logs
+
+When moving AU 26 slider with blend weight at 0.0 (pure bone), you should see:
+
+```
+[EngineThree] JAW bone resolved: CC_Base_JawRoot <THREE.Bone>
+[EngineThree] setAU(26, 0.50) - calling applyBones
+[EngineThree] applyBothSides AU26 value=0.50, keys: ['Jaw_Open']
+[EngineThree] mixWeight=0.00, morphValue=0.00
+[EngineThree] applyBones AU26 value=0.50 {
+  bindings: ['JAW:ry:20deg'],
+  jawResolved: true,
+  jawBoneName: 'CC_Base_JawRoot'
+}
+```
+
+### Testing Checklist
+
+- [x] Updated JAW_BONE_CANDIDATES to include `CC_Base_JawRoot` first
+- [ ] Refresh browser to reload model with updated candidates
+- [ ] Verify console shows `JAW bone resolved: CC_Base_JawRoot`
+- [ ] Move AU 26 slider with blend at 0.0 (pure bone)
+- [ ] Check for `jawResolved: true` in console
+- [ ] Observe if jaw bone rotates
+
+### If Jaw Still Not Rotating
+
+Try different rotation axes or directions:
+
+**Option 1: X-axis rotation (pitch)**
+```typescript
+26: [ { node: 'JAW', channel: 'rx', scale: 1, maxDegrees: 20 } ],
+```
+
+**Option 2: Z-axis rotation (roll)**
+```typescript
+26: [ { node: 'JAW', channel: 'rz', scale: 1, maxDegrees: 20 } ],
+```
+
+**Option 3: Negative rotation direction**
+```typescript
+26: [ { node: 'JAW', channel: 'ry', scale: -1, maxDegrees: 20 } ],
+```
+
+### Code References
+
+| File | Line | Purpose |
+|------|------|---------|
+| [EngineThree.ts:846-855](EngineThree.ts#L846-L855) | Jaw bone resolution logic |
+| [EngineThree.ts:711-756](EngineThree.ts#L711-L756) | `applyBones()` - Applies bone rotations |
+| [EngineThree.ts:758-795](EngineThree.ts#L758-L795) | `applySingleBinding()` - Quaternion rotation math |
+| [EngineThree.ts:379-387](EngineThree.ts#L379-L387) | `setAU()` - Debug logging for jaw AUs |
+| [CharacterGLBScene.tsx:189-261](../scenes/CharacterGLBScene.tsx#L189-L261) | GLB model inspection logs |
+
+### Previous Attempts
+
+- ❌ Tried `channel: 'rx'` with `scale: -1` - No rotation
+- ❌ Tried `channel: 'rx'` with `scale: 1` - No rotation
+- ⏳ Now testing `channel: 'ry'` with `scale: 1` after bone candidate fix
+
+**Status:** Awaiting user testing after `CC_Base_JawRoot` prioritization update.
