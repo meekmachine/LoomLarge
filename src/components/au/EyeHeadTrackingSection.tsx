@@ -80,9 +80,11 @@ export default function EyeHeadTrackingSection({ engine, disabled = false }: Eye
     const avgX = (leftEye.x + rightEye.x) / 2;
     const avgY = (leftEye.y + rightEye.y) / 2;
 
-    // Convert to normalized coordinates (-1 to 1), negated so character looks at user
-    const gazeX = -(avgX * 2 - 1);
-    const gazeY = -(avgY * 2 - 1);
+    // Convert to normalized coordinates (-1 to 1)
+    // NOTE: Webcam coordinates are already mirrored by the camera, so we don't negate X
+    // But we DO negate Y because webcam Y is top-down (0 at top) vs our coordinate system
+    const gazeX = (avgX * 2 - 1);  // No negation - webcam already mirrors horizontally
+    const gazeY = -(avgY * 2 - 1); // Negate to flip Y axis
 
     // Apply to service
     eyeHeadTrackingService.setGazeTarget({ x: gazeX, y: gazeY, z: 0 });

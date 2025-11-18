@@ -124,108 +124,153 @@ Use direct composite calls for:
 - Interactive gaze control
 - Reactive behaviors
 
-## Implemented Solution: Virtual Continuum AUs
+## Implemented Solution: Directional Animation Snippets with Real AU IDs
 
-We've implemented **Solution 1 (Virtual Continuum AUs)** as a proof of concept to enable animation-based tracking while preserving composite behavior.
+We've implemented a **directional animation approach** that uses real ARKit AU IDs (61-64, 31-33, 54-56) to schedule eye/head tracking animations.
 
 ### How It Works
 
-1. **Virtual AU IDs (100-series)**:
+1. **Real ARKit AU IDs** (same as continuum sliders):
    ```typescript
-   const VIRTUAL_AUS = {
-     EYE_YAW: '100',      // -1 (left) to +1 (right)
-     EYE_PITCH: '101',    // -1 (down) to +1 (up)
-     HEAD_YAW: '102',     // -1 (left) to +1 (right)
-     HEAD_PITCH: '103',   // -1 (down) to +1 (up)
-     HEAD_ROLL: '104',    // -1 (left tilt) to +1 (right tilt)
+   const EYE_HEAD_AUS = {
+     // Eye AUs (handle blend shapes + eye bones via applyCompositeMotion)
+     EYE_YAW_LEFT: '61',    // Negative yaw
+     EYE_YAW_RIGHT: '62',   // Positive yaw
+     EYE_PITCH_UP: '63',    // Positive pitch
+     EYE_PITCH_DOWN: '64',  // Negative pitch
+
+     // Head AUs (handle blend shapes + head/neck bones via applyCompositeMotion)
+     HEAD_YAW_LEFT: '31',   // Turn left
+     HEAD_YAW_RIGHT: '32',  // Turn right
+     HEAD_PITCH_UP: '33',   // Look up
+     HEAD_PITCH_DOWN: '54', // Look down
    };
    ```
 
-2. **Scheduler schedules virtual AUs**:
+2. **Scheduler creates directional animation curves**:
    ```typescript
+   // Mouse at (x=-0.5, y=0.3) → Schedule two animations with intensity scaling
+
+   // Eye look left with 50% intensity
    anim.schedule({
-     name: 'eyeHeadTracking/eyes',
+     name: 'eyeHeadTracking/eyeYawLeft',
      curves: {
-       '100': [{ time: 0, intensity: -0.5 }],  // Eye yaw continuum
-       '101': [{ time: 0, intensity: 0.3 }]    // Eye pitch continuum
+       '61': [
+         { time: 0, intensity: 0 },    // Start at neutral
+         { time: 0.2, intensity: 1.0 } // Animate to full over 200ms
+       ]
      },
      snippetCategory: 'eyeHeadTracking',
-     snippetPriority: 20
+     snippetPriority: 20,
+     snippetIntensityScale: 0.5  // 50% intensity from mouse x=-0.5
+   });
+
+   // Eye look up with 30% intensity
+   anim.schedule({
+     name: 'eyeHeadTracking/eyePitchUp',
+     curves: {
+       '63': [
+         { time: 0, intensity: 0 },
+         { time: 0.2, intensity: 1.0 }
+       ]
+     },
+     snippetCategory: 'eyeHeadTracking',
+     snippetPriority: 20,
+     snippetIntensityScale: 0.3  // 30% intensity from mouse y=0.3
    });
    ```
 
-3. **Animation service host intercepts virtual AUs** (in `threeContext.tsx`):
+3. **Animation service calls setAU() with real AU IDs**:
    ```typescript
-   const host = {
-     applyAU: (id: number | string, v: number) => {
-       const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+   // Animation service interpolates curves and calls:
+   engine.setAU(61, 0.5);  // Eye yaw left at 50% (from snippetIntensityScale)
+   engine.setAU(63, 0.3);  // Eye pitch up at 30%
 
-       // Handle virtual continuum AUs
-       if (numId >= 100 && numId < 200) {
-         switch(numId) {
-           case 100: // Eye Yaw
-             continuumState.eyeYaw = v;
-             engine.applyEyeComposite(continuumState.eyeYaw, continuumState.eyePitch);
-             return;
-           case 101: // Eye Pitch
-             continuumState.eyePitch = v;
-             engine.applyEyeComposite(continuumState.eyeYaw, continuumState.eyePitch);
-             return;
-           // ... etc
-         }
-       }
-
-       // Regular AU handling
-       engine.setAU(id, v);
-     }
-   };
+   // setAU() internally calls applyCompositeMotion() which:
+   // 1. Applies morphs (Eye_L_Look_L, Eye_R_Look_L, Eye_L_Look_Up, Eye_R_Look_Up)
+   // 2. Applies bone rotations (EYE_L and EYE_R bones rotate by ry and rx)
+   // 3. Both happen in the SAME operation, coordinated by applyCompositeMotion()
    ```
 
 ### Benefits
 
-✅ **Uses animation service** - Can leverage priority blending, timing, etc.
-✅ **Preserves composite behavior** - Both morphs and bones move together
-✅ **Simple interface** - Schedule continuum values directly (-1 to +1)
-✅ **No AU pair complexity** - Don't need to split into directional AUs
-✅ **Coordinated updates** - Composite methods handle multi-AU/bone coordination
+✅ **Uses animation service** - Full priority blending, curves, timing
+✅ **Uses existing AU infrastructure** - Same AUs as continuum sliders (61-64, 31-33, 54-56)
+✅ **Preserves composite behavior** - `setAU()` → `applyCompositeMotion()` → morphs + bones together
+✅ **No virtual AU complexity** - Direct use of real ARKit AUs
+✅ **Intensity scaling** - `snippetIntensityScale` controls strength of each direction
+✅ **Animation blending** - Animation service blends multiple directions (e.g., left + up)
 
-### Tradeoffs
+### How Blend Shapes + Bones Work Together
 
-⚠️ **Calling composite on every AU update** - Each virtual AU triggers a full composite call
-   - Eye yaw update → calls `applyEyeComposite(yaw, pitch)`
-   - Eye pitch update → calls `applyEyeComposite(yaw, pitch)` again
-   - Could be optimized to batch updates
+The key is that **real ARKit AUs (61-64, 31-33, 54-56) are MIXED_AUS** - they control BOTH morphs and bones:
 
-⚠️ **State tracking required** - Need to track current continuum values in host
-   - Adds complexity to animation service host
-   - State could get out of sync if not careful
+```typescript
+// When animation service calls setAU(61, 0.5):
+1. setAU() updates tracked state (currentEyeYaw)
+2. Calls applyCompositeMotion(61, 63, yaw, pitch, 64)
+3. applyCompositeMotion() does TWO things:
+   a. applyBoneComposite() - Rotates EYE_L and EYE_R bones (always full intensity)
+   b. applyMorphs() - Applies Eye_L_Look_L and Eye_R_Look_L morphs (scaled by mix weight)
+4. Final result: Eyeball rotation + eyelid deformation, perfectly synchronized
+```
 
-⚠️ **Virtual AU namespace** - Need to reserve ID range (100-199)
-   - Shouldn't conflict with real ARKit AUs (1-99)
-   - Need to document this convention
+This is EXACTLY how the continuum sliders work - by using the same real AU IDs, we get the same coordinated morph+bone behavior.
 
-### Current Approach vs. Virtual AU Approach
+### Comparison with Direct Composite
 
-| Aspect | Direct Composite (Current) | Virtual AU Approach |
-|--------|---------------------------|---------------------|
-| **Simplicity** | ✅ Very simple | ⚠️ More complex (virtual AUs, host logic) |
-| **Performance** | ✅ Direct calls, no overhead | ⚠️ Extra logic in host, redundant composite calls |
+| Aspect | Direct Composite | Directional Animation Snippets |
+|--------|------------------|-------------------------------|
+| **Simplicity** | ✅ Very simple | ⚠️ More setup (animation curves) |
+| **Performance** | ✅ Direct calls | ✅ Same AU pipeline, minimal overhead |
 | **Animation Integration** | ❌ Bypasses animation service | ✅ Full animation service integration |
-| **Priority Blending** | ❌ Not supported | ✅ Supported (blend with other animations) |
-| **Timing/Curves** | ❌ Manual implementation needed | ✅ Built-in from animation service |
-| **Maintenance** | ✅ Isolated from animation system | ⚠️ Coupled to animation service host |
+| **Priority Blending** | ❌ Not supported | ✅ Supported (blend with lip-sync, expressions) |
+| **Timing/Curves** | ❌ Manual implementation | ✅ Built-in easing and curves |
+| **Composite Coordination** | ✅ Direct composite calls | ✅ Same composite calls via setAU() |
 
-### Recommendation
+### Implementation
 
-**Current production use: Direct composite approach**
-- Simpler, faster, proven working
-- Best for real-time interactive tracking
+See [eyeHeadTrackingScheduler_v2.ts](eyeHeadTrackingScheduler_v2.ts) for the scheduler implementation that creates directional animation snippets with real AU IDs.
 
-**Future exploration: Virtual AU approach**
-- Enables advanced animation features (priority blending, curves, etc.)
-- Useful if we want to blend tracking with other facial animations
-- Could be optimized to batch composite calls
+## Input Coordinate Handling
 
-**Both can coexist**:
-- Direct composite for simple real-time tracking
-- Virtual AUs when animation service features are needed
+The eye/head tracking system receives input from two sources: mouse tracking and webcam tracking. Each requires different coordinate processing.
+
+### Mouse Tracking Coordinates
+
+Mouse tracking uses **mirror behavior** - when the mouse moves left, the character looks right (at the user):
+
+```typescript
+// Mouse coordinates (mirrored for natural interaction)
+const x = -((e.clientX / window.innerWidth) * 2 - 1);   // Negate X for mirror
+const y = -((e.clientY / window.innerHeight) * 2 - 1);  // Negate Y for coordinate flip
+```
+
+**Why negate both**:
+- **X negation**: Creates mirror behavior - mouse left → character looks right (at the user)
+- **Y negation**: Converts from screen coordinates (Y=0 at top) to standard coordinates (negative Y is down)
+
+### Webcam Tracking Coordinates
+
+Webcam tracking processes face landmarks from BlazeFace and converts them to gaze coordinates:
+
+```typescript
+// Webcam coordinates (camera already mirrors image)
+const gazeX = (avgX * 2 - 1);   // NO negation - webcam already mirrors horizontally
+const gazeY = -(avgY * 2 - 1);  // Negate to flip Y axis
+```
+
+**Why different from mouse**:
+- **X NOT negated**: The webcam video feed is **already horizontally mirrored** by the camera hardware (like looking in a mirror). Negating X would cause double inversion.
+- **Y still negated**: Webcam Y coordinates are top-down (0 at top), so we still need to negate for coordinate system conversion.
+
+### Critical Difference
+
+The key insight is that **webcam feeds are pre-mirrored by camera hardware**:
+
+| Input Source | X Negation | Y Negation | Reason |
+|-------------|-----------|-----------|---------|
+| **Mouse** | ✅ Yes | ✅ Yes | Manual mirror behavior + coordinate flip |
+| **Webcam** | ❌ No | ✅ Yes | Camera already mirrors + coordinate flip |
+
+**Testing note**: When testing webcam tracking, if the character's gaze moves in the opposite direction from your movements, check that X is NOT being negated. The webcam image itself should appear mirrored (like a mirror), but the gaze tracking should feel natural (you move left → character looks at you on the left).

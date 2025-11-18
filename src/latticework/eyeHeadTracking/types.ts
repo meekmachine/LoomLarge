@@ -51,6 +51,7 @@ export interface EyeHeadTrackingConfig {
   webcamLookAtUser?: boolean; // Make character look at user's face position
   webcamActivationInterval?: number; // How often to activate webcam tracking (ms)
   engine?: any; // EngineThree for applying gaze directly
+  animationAgency?: any; // Animation agency for scheduling approach
 
   // Coordination with mouth
   mouthSyncEnabled?: boolean; // Coordinate with speech/lip-sync
@@ -136,7 +137,6 @@ export const DEFAULT_EYE_HEAD_CONFIG = {
   webcamTrackingEnabled: false,
   webcamLookAtUser: false,
   webcamActivationInterval: 7000, // 7 seconds
-  animationManager: undefined,
 
   // Coordination
   mouthSyncEnabled: true,

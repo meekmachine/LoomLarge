@@ -113,19 +113,28 @@ applyCompositeMotion(baseYawId, basePitchId, yaw, pitch, ...)
 
 ### Composite Motion System
 
-The `applyCompositeMotion()` method handles multi-axis movement (e.g., eyes looking up-left):
+The `applyCompositeMotion()` method handles multi-axis movement (e.g., eyes looking up-left) by coordinating **both blend shapes (morphs) AND bone rotations** in a single operation.
+
+**Why This Matters:**
+- Eye/head movements need BOTH morphs (for eyelid deformation, brow movement) AND bones (for eyeball/head rotation)
+- Calling them separately would cause timing issues and incorrect blending
+- `applyCompositeMotion()` ensures they're applied together with proper intensity scaling
 
 **Base AU IDs (used for mix weight lookup):**
-- Eyes: `baseYawId=61` (horizontal), `basePitchId=63` (vertical)
-- Head: `baseYawId=31` (horizontal), `basePitchId=33` (vertical)
+- Eyes: `baseYawId=61` (horizontal), `basePitchId=63` (vertical up), `64` (vertical down)
+- Head: `baseYawId=31` (horizontal left), `32` (horizontal right), `basePitchId=33` (vertical up), `54` (vertical down)
 
 **Example:** Eyes looking up and to the right
-1. `setEyesHorizontal(0.5)` → `currentEyeYaw = 0.5`
-2. `setEyesVertical(0.8)` → `currentEyePitch = 0.8`
-3. `applyEyeComposite(0.5, 0.8)` called
-4. `applyCompositeMotion(61, 63, 0.5, 0.8, 64)` called
-5. **Bones:** Both eyes rotate by `ry=0.5 * 25° = 12.5°` and `rx=0.8 * 20° = 16°`
-6. **Morphs:** Applied based on mix weights from AU 61 (yaw) and AU 63 (pitch)
+1. Animation service schedules AU 62 (yaw right) and AU 63 (pitch up) with curves
+2. `setAU(62, 0.5)` called → Updates tracked state, calls `applyCompositeMotion()`
+3. `setAU(63, 0.8)` called → Updates tracked state, calls `applyCompositeMotion()` again
+4. `applyCompositeMotion(61, 63, 0.5, 0.8, 64)` executes:
+   - **Bones:** Both eyes rotate `ry=0.5 * 25° = 12.5°` and `rx=0.8 * 20° = 16°` simultaneously
+   - **Morphs:** `Eye_L_Look_R`, `Eye_R_Look_R`, `Eye_L_Look_Up`, `Eye_R_Look_Up` applied
+   - **Mix Weight:** Morphs scaled by mix weight (0-1), bones always at full intensity
+5. Final result: Coordinated eyeball rotation + eyelid/brow morphs
+
+**Critical:** Both morphs and bones are applied in the SAME call to `applyCompositeMotion()`. This is how the continuum sliders work, and why animation scheduling must use the same real AU IDs (61-64, 31-33, 54-56).
 
 ### Multi-Axis Preservation
 

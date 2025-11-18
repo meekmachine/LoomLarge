@@ -49,46 +49,11 @@ export const ThreeProvider: React.FC<React.PropsWithChildren> = ({ children }) =
       if (typeof window !== 'undefined') {
         (window as any).facslib = engineRef.current;
       }
-    // Track continuum values for composite updates
-    const continuumState = {
-      eyeYaw: 0,
-      eyePitch: 0,
-      headYaw: 0,
-      headPitch: 0,
-      headRoll: 0,
-    };
 
     const host = {
       applyAU: (id: number | string, v: number) => {
-        const numId = typeof id === 'string' ? parseInt(id, 10) : id;
-
-        // Handle virtual continuum AUs (100-series)
-        if (numId >= 100 && numId < 200) {
-          switch(numId) {
-            case 100: // Eye Yaw Continuum
-              continuumState.eyeYaw = v;
-              engineRef.current!.applyEyeComposite(continuumState.eyeYaw, continuumState.eyePitch);
-              return;
-            case 101: // Eye Pitch Continuum
-              continuumState.eyePitch = v;
-              engineRef.current!.applyEyeComposite(continuumState.eyeYaw, continuumState.eyePitch);
-              return;
-            case 102: // Head Yaw Continuum
-              continuumState.headYaw = v;
-              engineRef.current!.applyHeadComposite(continuumState.headYaw, continuumState.headPitch, continuumState.headRoll);
-              return;
-            case 103: // Head Pitch Continuum
-              continuumState.headPitch = v;
-              engineRef.current!.applyHeadComposite(continuumState.headYaw, continuumState.headPitch, continuumState.headRoll);
-              return;
-            case 104: // Head Roll Continuum
-              continuumState.headRoll = v;
-              engineRef.current!.applyHeadComposite(continuumState.headYaw, continuumState.headPitch, continuumState.headRoll);
-              return;
-          }
-        }
-
-        // Regular AU handling
+        // All AUs use regular handling - composite AUs (61, 63, 64, 31, 33, 54, etc.)
+        // already handle blend shapes + bones through applyCompositeMotion()
         engineRef.current!.setAU(id as any, v);
       },
       setMorph: (key: string, v: number) => engineRef.current!.setMorph(key, v),

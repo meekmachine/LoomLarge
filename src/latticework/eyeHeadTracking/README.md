@@ -96,19 +96,63 @@ eyeHeadTracking.updateConfig({
 });
 ```
 
-## Integration with Animation Service
+## Integration with Animation Agency
 
-The Eye and Head Tracking Agency works alongside other Latticework agencies with priority-based scheduling:
+The Eye and Head Tracking Agency supports two operational modes:
+
+### 1. Animation Agency Mode (Scheduler-Based)
+
+Uses the animation agency for full animation curve scheduling with priority blending:
 
 ```typescript
-// Priority hierarchy (from AnimationService):
+import { createEyeHeadTrackingService } from '@/latticework/eyeHeadTracking';
+import { createAnimationService } from '@/latticework/animation';
+
+const anim = createAnimationService(engine);
+
+const eyeHeadTracking = createEyeHeadTrackingService({
+  eyeTrackingEnabled: true,
+  headTrackingEnabled: true,
+  animationAgency: anim, // Use animation agency for scheduling
+}, callbacks);
+
+// Gaze changes create animation snippets that blend with other animations
+eyeHeadTracking.setGazeTarget({ x: 0.5, y: 0.2 });
+
+// Priority hierarchy (from Animation Agency):
 // - Eye/Head Tracking: Priority 15-20 (highest)
 // - LipSync Visemes: Priority 10
 // - Prosodic Pulses: Priority 5
 // - Emotion/Expression: Priority 0-5 (baseline)
-
-// Eye movements will always override lower-priority animations
 ```
+
+**How it works:**
+- Scheduler creates directional animation snippets using real ARKit AU IDs (61-64, 31-33, 54-56)
+- Animation agency blends eye/head movements with lip-sync and expressions
+- Smooth transitions between gaze targets using animation curves
+- See [ANIMATION_APPROACH.md](ANIMATION_APPROACH.md) for technical details
+
+### 2. Direct Composite Mode (Engine-Based)
+
+Uses direct composite method calls for immediate AU application:
+
+```typescript
+const eyeHeadTracking = createEyeHeadTrackingService({
+  eyeTrackingEnabled: true,
+  headTrackingEnabled: true,
+  engine: engine, // Use engine for direct composite calls
+}, callbacks);
+
+// Gaze changes apply directly to engine via applyEyeComposite/applyHeadComposite
+eyeHeadTracking.setGazeTarget({ x: 0.5, y: 0.2 });
+```
+
+**When to use:**
+- Real-time interactive tracking (mouse, webcam)
+- Lower latency requirements
+- Simpler integration without animation agency
+
+**Note:** Both modes use the same composite AU architecture (morphs + bones), just different scheduling mechanisms.
 
 ## State Machine Architecture
 
@@ -256,9 +300,51 @@ interface EyeHeadTrackingCallbacks {
 - Submachines run independently for optimal performance
 - State changes are batched to minimize re-renders
 
+## Input Modes
+
+The agency supports multiple input modes for gaze control:
+
+### Manual Mode
+
+Direct programmatic control via `setGazeTarget()`:
+
+```typescript
+eyeHeadTracking.setMode('manual');
+eyeHeadTracking.setGazeTarget({ x: 0.5, y: 0.2 });
+```
+
+### Mouse Tracking Mode
+
+Character follows mouse cursor position:
+
+```typescript
+eyeHeadTracking.setMode('mouse');
+// Character now automatically tracks mouse movements
+```
+
+**Coordinate processing:**
+- X and Y are both negated for mirror behavior
+- Mouse left → character looks right (at the user)
+- Natural interaction like looking at someone across from you
+
+### Webcam Tracking Mode
+
+Character follows user's face position from webcam:
+
+```typescript
+eyeHeadTracking.setMode('webcam');
+eyeHeadTracking.setWebcamTracking(webcamInstance);
+```
+
+**Coordinate processing:**
+- **X is NOT negated** (webcam feed is already mirrored by camera hardware)
+- **Y is negated** (to flip from top-down to standard coordinates)
+- Natural interaction where moving left makes character look at you on the left
+
+**Critical difference:** Webcam feeds are pre-mirrored by camera hardware, so only Y needs negation. See [ANIMATION_APPROACH.md](ANIMATION_APPROACH.md) for details.
+
 ## Future Enhancements
 
-- Face/object tracking integration
 - Vergence (eye convergence for depth)
 - Microsaccades during fixation
 - Vestibulo-ocular reflex (VOR) simulation
