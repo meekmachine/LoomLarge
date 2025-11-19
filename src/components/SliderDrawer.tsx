@@ -18,7 +18,6 @@ import { FaBars } from 'react-icons/fa';
 import { AU_INFO, AUInfo } from '../engine/arkit/shapeDict';
 import AUSection from './au/AUSection';
 import VisemeSection from './au/VisemeSection';
-import WindSection from './au/WindSection';
 import TTSSection from './au/TTSSection';
 import EyeHeadTrackingSection from './au/EyeHeadTrackingSection';
 import DockableAccordionItem from './au/DockableAccordionItem';
@@ -54,7 +53,7 @@ export default function SliderDrawer({
   onToggle,
   disabled = false
 }: SliderDrawerProps) {
-  const { engine, windEngine, anim, addFrameListener } = useThreeState();
+  const { engine, anim, addFrameListener } = useThreeState();
 
   // Track AU intensities in local state for UI
   const [auStates, setAuStates] = useState<Record<string, number>>({});
@@ -325,13 +324,6 @@ export default function SliderDrawer({
                 engine={engine}
                 disabled={disabled}
               />
-
-              {/* Wind Physics Section */}
-              <WindSection
-                windEngine={windEngine}
-                disabled={disabled}
-              />
-
 
               {/* Viseme Section */}
               <VisemeSection

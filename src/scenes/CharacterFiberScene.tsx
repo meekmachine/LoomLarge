@@ -2,14 +2,12 @@ import React, { useRef, useEffect, useState, Suspense } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useGLTF, Environment, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import { EngineWind } from '../engine/EngineWind';
 import { useFiberState } from '../context/fiberContext';
 
 type CharacterReady = {
   scene: THREE.Scene;
   model: THREE.Object3D;
   meshes: THREE.Mesh[];
-  windEngine?: EngineWind;
 };
 
 type Props = {
@@ -39,7 +37,6 @@ function CharacterModel({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const modelRef = useRef<THREE.Object3D | null>(null);
-  const windEngineRef = useRef<EngineWind | null>(null);
   const [isReady, setIsReady] = useState(false);
 
   const { scene: threeScene } = useThree();
@@ -89,10 +86,6 @@ function CharacterModel({
 
     console.log('[CharacterFiberScene] Found', meshes.length, 'meshes with morph targets');
 
-    // Initialize wind engine
-    const windEngine = new EngineWind(model);
-    windEngineRef.current = windEngine;
-
     // Add model to the group
     if (groupRef.current) {
       groupRef.current.add(model);
@@ -102,8 +95,7 @@ function CharacterModel({
     onReady?.({
       scene: threeScene,
       model,
-      meshes,
-      windEngine
+      meshes
     });
 
     setIsReady(true);
@@ -115,12 +107,7 @@ function CharacterModel({
       groupRef.current.rotation.y += delta * 0.3;
     }
 
-    // Update wind engine
-    if (windEngineRef.current) {
-      windEngineRef.current.update(delta);
-    }
-
-    // Update EngineFour (transitions)
+    // Update EngineThree (transitions)
     if (engine) {
       engine.update(delta);
     }

@@ -13,7 +13,7 @@ import './styles.css';
 import { AU_TO_MORPHS } from './engine/arkit/shapeDict';
 
 function AppContent() {
-  const { engine, anim, setWindEngine } = useThreeState();
+  const { engine, anim } = useThreeState();
   const { setEyeHeadTrackingService } = useModulesContext();
 
   const [auditSummary, setAuditSummary] = useState<{ morphCount:number; totalAUs:number; fullCovered:number; partial:number; zero:number } | null>(null);
@@ -59,17 +59,8 @@ function AppContent() {
   }
 
   const handleReady = useCallback(
-    ({ meshes, model, windEngine, hairService }: { meshes: any[]; model?: any; windEngine?: any; hairService?: HairService }) => {
+    ({ meshes, model, hairService }: { meshes: any[]; model?: any; hairService?: HairService }) => {
       engine.onReady({ meshes, model });
-
-      // Set wind engine in context if available
-      if (windEngine) {
-        setWindEngine(windEngine);
-        // Expose wind engine globally for debugging
-        if (typeof window !== 'undefined') {
-          (window as any).windEngine = windEngine;
-        }
-      }
 
       // Set hair service if available
       if (hairService) {
@@ -87,7 +78,7 @@ function AppContent() {
       anim?.play?.();
       setIsLoading(false);
     },
-    [engine, anim, setWindEngine]
+    [engine, anim]
   );
 
   const handleProgress = useCallback((progress: number) => {

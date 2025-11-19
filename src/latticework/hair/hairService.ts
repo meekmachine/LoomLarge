@@ -2,7 +2,7 @@
  * Hair Service
  *
  * Service layer for managing hair customization.
- * Bridges the XState machine with Three.js scene updates.
+ * Bridges the XState machine with EngineThree for Three.js updates.
  * Part of the latticework agency architecture.
  */
 
@@ -10,14 +10,17 @@ import * as THREE from 'three';
 import { createActor } from 'xstate';
 import { hairMachine } from './hairMachine';
 import { HairObjectRef, HairColor, HairEvent, HairState } from './types';
+import type { EngineThree } from '../../engine/EngineThree';
 
 export class HairService {
   private actor: ReturnType<typeof createActor<typeof hairMachine>>;
   private objects: HairObjectRef[] = [];
   private subscribers: Set<(state: HairState) => void> = new Set();
+  private engine: EngineThree | null = null;
 
-  constructor() {
+  constructor(engine?: EngineThree) {
     this.actor = createActor(hairMachine);
+    this.engine = engine || null;
 
     // Subscribe to state changes
     this.actor.subscribe((snapshot) => {
@@ -126,29 +129,33 @@ export class HairService {
   }
 
   /**
-   * Apply color to a hair mesh
+   * Apply color to a hair mesh using EngineThree
    */
   private applyColorToMesh(mesh: THREE.Mesh, color: HairColor) {
-    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    if (this.engine) {
+      // Use EngineThree method for consistent Three.js operations
+      this.engine.setHairColor(mesh, color.baseColor, color.emissive, color.emissiveIntensity);
+    } else {
+      // Fallback: apply directly if engine not available
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
 
-    materials.forEach((mat) => {
-      const standardMat = mat as THREE.MeshStandardMaterial;
+      materials.forEach((mat) => {
+        const standardMat = mat as THREE.MeshStandardMaterial;
 
-      // Set base color
-      if (standardMat.color !== undefined) {
-        standardMat.color = new THREE.Color(color.baseColor);
-      }
+        if (standardMat.color !== undefined) {
+          standardMat.color = new THREE.Color(color.baseColor);
+        }
 
-      // Set emissive glow
-      if (standardMat.emissive !== undefined) {
-        standardMat.emissive = new THREE.Color(color.emissive);
-        standardMat.emissiveIntensity = color.emissiveIntensity;
-      }
-    });
+        if (standardMat.emissive !== undefined) {
+          standardMat.emissive = new THREE.Color(color.emissive);
+          standardMat.emissiveIntensity = color.emissiveIntensity;
+        }
+      });
+    }
   }
 
   /**
-   * Apply or remove outline wireframe
+   * Apply or remove outline wireframe using EngineThree
    */
   private applyOutline(
     objRef: HairObjectRef,
@@ -159,27 +166,34 @@ export class HairService {
     const { mesh } = objRef;
     if (!mesh) return;
 
-    // Remove existing wireframe if present
-    if (objRef.wireframe) {
-      mesh.remove(objRef.wireframe);
-      objRef.wireframe.geometry.dispose();
-      (objRef.wireframe.material as THREE.Material).dispose();
-      objRef.wireframe = undefined;
-    }
-
-    // Add wireframe if requested
-    if (show) {
-      const wireframeGeometry = new THREE.WireframeGeometry(mesh.geometry);
-      const wireframeMaterial = new THREE.LineBasicMaterial({
-        color: new THREE.Color(color),
-        linewidth: 2,
-        transparent: true,
-        opacity: opacity,
-      });
-      const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
-      wireframe.name = `${mesh.name}_wireframe`;
-      mesh.add(wireframe);
+    if (this.engine) {
+      // Use EngineThree method for consistent Three.js operations
+      const wireframe = this.engine.setHairOutline(mesh, show, color, opacity);
       objRef.wireframe = wireframe;
+    } else {
+      // Fallback: apply directly if engine not available
+      // Remove existing wireframe if present
+      if (objRef.wireframe) {
+        mesh.remove(objRef.wireframe);
+        objRef.wireframe.geometry.dispose();
+        (objRef.wireframe.material as THREE.Material).dispose();
+        objRef.wireframe = undefined;
+      }
+
+      // Add wireframe if requested
+      if (show) {
+        const wireframeGeometry = new THREE.WireframeGeometry(mesh.geometry);
+        const wireframeMaterial = new THREE.LineBasicMaterial({
+          color: new THREE.Color(color),
+          linewidth: 2,
+          transparent: true,
+          opacity: opacity,
+        });
+        const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
+        wireframe.name = `${mesh.name}_wireframe`;
+        mesh.add(wireframe);
+        objRef.wireframe = wireframe;
+      }
     }
   }
 

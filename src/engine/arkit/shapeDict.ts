@@ -551,3 +551,43 @@ export const AU_MIX_DEFAULTS: Record<number, number> = {
   64: 0.5,
   26: 0.8,
 };
+
+/**
+ * Hair and Eyebrow Object Detection Patterns
+ *
+ * Patterns used to automatically detect and classify hair/eyebrow objects in loaded 3D models.
+ * All pattern matching is case-insensitive.
+ */
+
+/**
+ * Patterns that identify eyebrow objects
+ */
+export const EYEBROW_PATTERNS = [
+  'eyebrow',
+  'brow',
+  'male_bushy',
+] as const;
+
+/**
+ * Exact name matches for eyebrow objects
+ */
+export const EYEBROW_EXACT_MATCHES = [
+  'male_bushy',
+] as const;
+
+/**
+ * Patterns that identify hair objects (excluding eyebrows)
+ */
+export const HAIR_PATTERNS = [
+  'hair',
+  'bushy',      // Only if not already classified as eyebrow
+  'side_part',
+  'sidepart',
+] as const;
+
+/**
+ * Exact name matches for hair objects
+ */
+export const HAIR_EXACT_MATCHES = [
+  'side_part_wavy',
+] as const;

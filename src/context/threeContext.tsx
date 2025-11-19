@@ -4,7 +4,6 @@ import React, { createContext, useContext, useMemo, useRef, useEffect, useState 
 import { createAnimationService } from '../latticework/animation/animationService';
 import * as THREE from 'three';
 import { EngineThree } from '../engine/EngineThree';
-import { EngineWind } from '../engine/EngineWind';
 
 export type ThreeContextValue = {
   engine: EngineThree;
@@ -13,10 +12,6 @@ export type ThreeContextValue = {
   anim: ReturnType<typeof createAnimationService>;
   /** Subscribe to the central frame loop. Returns an unsubscribe function. */
   addFrameListener: (callback: (deltaSeconds: number) => void) => () => void;
-  /** Wind physics engine (set after model loads) */
-  windEngine: EngineWind | null;
-  /** Set the wind engine (called from CharacterGLBScene after model loads) */
-  setWindEngine: (engine: EngineWind | null) => void;
 };
 
 const ThreeCtx = createContext<ThreeContextValue | null>(null);
@@ -29,7 +24,6 @@ export const ThreeProvider: React.FC<React.PropsWithChildren> = ({ children }) =
   const rafIdRef = useRef<number | null>(null);
   const animRef = useRef<ReturnType<typeof createAnimationService> | undefined>(undefined);
   const [animReady, setAnimReady] = useState(false);
-  const [windEngine, setWindEngine] = useState<EngineWind | null>(null);
 
   // Ensure engine and clock are singletons
   if (!engineRef.current) engineRef.current = new EngineThree();
@@ -126,11 +120,9 @@ export const ThreeProvider: React.FC<React.PropsWithChildren> = ({ children }) =
         listenersRef.current.add(cb);
         return () => listenersRef.current.delete(cb);
       },
-      windEngine,
-      setWindEngine,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [animReady, windEngine]);
+  }, [animReady]);
 
   if (!value) return null;
   return <ThreeCtx.Provider value={value}>{children}</ThreeCtx.Provider>;

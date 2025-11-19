@@ -923,6 +923,69 @@ export class EngineThree {
     return resolved;
   };
 
+  // ========================================
+  // Hair & Eyebrow Color Control
+  // ========================================
+
+  /**
+   * Apply color to a hair or eyebrow mesh
+   */
+  setHairColor(mesh: THREE.Mesh, baseColor: string, emissive: string, emissiveIntensity: number) {
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
+    materials.forEach((mat) => {
+      const standardMat = mat as THREE.MeshStandardMaterial;
+
+      // Set base color
+      if (standardMat.color !== undefined) {
+        standardMat.color = new THREE.Color(baseColor);
+      }
+
+      // Set emissive glow
+      if (standardMat.emissive !== undefined) {
+        standardMat.emissive = new THREE.Color(emissive);
+        standardMat.emissiveIntensity = emissiveIntensity;
+      }
+    });
+  }
+
+  /**
+   * Create or remove wireframe outline for a mesh
+   */
+  setHairOutline(mesh: THREE.Mesh, show: boolean, color: string, opacity: number): THREE.LineSegments | undefined {
+    // Remove existing wireframe if present
+    const existingWireframe = mesh.children.find(
+      (child) => child.name === `${mesh.name}_wireframe`
+    ) as THREE.LineSegments | undefined;
+
+    if (existingWireframe) {
+      mesh.remove(existingWireframe);
+      existingWireframe.geometry.dispose();
+      (existingWireframe.material as THREE.Material).dispose();
+    }
+
+    // Add wireframe if requested
+    if (show) {
+      const wireframeGeometry = new THREE.WireframeGeometry(mesh.geometry);
+      const wireframeMaterial = new THREE.LineBasicMaterial({
+        color: new THREE.Color(color),
+        linewidth: 2,
+        transparent: true,
+        opacity: opacity,
+      });
+      const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
+      wireframe.name = `${mesh.name}_wireframe`;
+      mesh.add(wireframe);
+      return wireframe;
+    }
+
+    return undefined;
+  }
+
+  // ========================================
+  // End Hair & Eyebrow Control
+  // ========================================
+
   private collectSkeletonBones = (root: THREE.Object3D): THREE.Bone[] => {
     const out: THREE.Bone[] = [];
     root.traverse((obj) => {

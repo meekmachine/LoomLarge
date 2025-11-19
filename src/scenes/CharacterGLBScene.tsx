@@ -6,14 +6,14 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
-import { EngineWind } from '../engine/EngineWind';
 import { HairService } from '../latticework/hair/hairService';
+import { HAIR_PATTERNS, HAIR_EXACT_MATCHES, EYEBROW_PATTERNS, EYEBROW_EXACT_MATCHES } from '../engine/arkit/shapeDict';
+import { useThreeState } from '../context/threeContext';
 
 export type CharacterReady = {
   scene: THREE.Scene;
   model: THREE.Object3D;
   meshes: THREE.Mesh[]; // meshes with morph targets (for facslib)
-  windEngine?: EngineWind; // wind physics engine for hair
   hairService?: HairService; // hair customization service
 };
 
@@ -42,6 +42,7 @@ export default function CharacterGLBScene({
   skyboxUrl,
 }: Props) {
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const { engine } = useThreeState();
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -124,7 +125,6 @@ export default function CharacterGLBScene({
     loader.setDRACOLoader(dracoLoader);
 
     let model: THREE.Object3D | null = null;
-    let windEngine: EngineWind | null = null;
     let hairService: HairService | null = null;
     let raf = 0;
     let loadingTextMesh: THREE.Mesh | null = null;
@@ -218,25 +218,32 @@ export default function CharacterGLBScene({
         // HAIR DETECTION & SERVICE INITIALIZATION
         // ============================================
         // Automatically detect hair and eyebrow objects in the loaded model
-        // Searches for objects with names containing: hair, bushy, side_part, eyebrow
+        // Uses centralized patterns from shapeDict.ts
         const hairObjects: THREE.Object3D[] = [];
 
         model.traverse((obj) => {
           const nameLower = obj.name.toLowerCase();
-          if (nameLower.includes('hair') ||
-              nameLower.includes('bushy') ||
-              nameLower.includes('side_part') ||
-              nameLower.includes('sidepart') ||
-              nameLower.includes('eyebrow') ||
-              nameLower === 'male_bushy' ||
-              nameLower === 'side_part_wavy') {
+
+          // Check exact matches first
+          const isExactMatch =
+            [...HAIR_EXACT_MATCHES, ...EYEBROW_EXACT_MATCHES].some(
+              exact => nameLower === exact.toLowerCase()
+            );
+
+          // Check pattern matches
+          const isPatternMatch =
+            [...HAIR_PATTERNS, ...EYEBROW_PATTERNS].some(
+              pattern => nameLower.includes(pattern.toLowerCase())
+            );
+
+          if (isExactMatch || isPatternMatch) {
             hairObjects.push(obj);
           }
         });
 
         // Initialize hair customization service if hair objects were found
         if (hairObjects.length > 0) {
-          hairService = new HairService();
+          hairService = new HairService(engine);
           hairService.registerObjects(hairObjects);
         }
 
@@ -290,15 +297,6 @@ export default function CharacterGLBScene({
           }
         });
 
-        // Initialize wind physics engine for hair
-        windEngine = new EngineWind(model);
-        if (windEngine.getHairBoneCount() > 0) {
-          console.log(`[CharacterGLBScene] Wind engine initialized with ${windEngine.getHairBoneCount()} hair bones:`,
-            windEngine.getHairBoneNames());
-        } else {
-          console.log('[CharacterGLBScene] No hair bones detected - wind physics disabled');
-        }
-
         // Remove loading text when model is ready
         if (loadingTextMesh) {
           scene.remove(loadingTextMesh);
@@ -307,7 +305,7 @@ export default function CharacterGLBScene({
           loadingTextMesh = null;
         }
 
-        onReady?.({ scene, model, meshes, windEngine: windEngine, hairService: hairService || undefined });
+        onReady?.({ scene, model, meshes, hairService: hairService || undefined });
       },
       (progressEvent) => {
         // Calculate loading progress percentage
@@ -331,11 +329,6 @@ export default function CharacterGLBScene({
     const animate = () => {
       const dt = clock.getDelta();
       if (autoRotate && model) model.rotation.y += 0.2 * dt;
-
-      // Update wind physics
-      if (windEngine) {
-        windEngine.update(dt);
-      }
 
       // Animate loading text with wobble
       if (loadingTextMesh) {
