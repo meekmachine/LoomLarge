@@ -7,7 +7,7 @@ import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 import { HairService } from '../latticework/hair/hairService';
-import { HAIR_PATTERNS, HAIR_EXACT_MATCHES, EYEBROW_PATTERNS, EYEBROW_EXACT_MATCHES } from '../engine/arkit/shapeDict';
+import { classifyHairObject } from '../engine/arkit/shapeDict';
 import { useThreeState } from '../context/threeContext';
 
 export type CharacterReady = {
@@ -218,25 +218,14 @@ export default function CharacterGLBScene({
         // HAIR DETECTION & SERVICE INITIALIZATION
         // ============================================
         // Automatically detect hair and eyebrow objects in the loaded model
-        // Uses centralized patterns from shapeDict.ts
+        // Uses centralized classification from shapeDict.ts
         const hairObjects: THREE.Object3D[] = [];
 
         model.traverse((obj) => {
-          const nameLower = obj.name.toLowerCase();
+          // Use centralized classification helper
+          const classification = classifyHairObject(obj.name);
 
-          // Check exact matches first
-          const isExactMatch =
-            [...HAIR_EXACT_MATCHES, ...EYEBROW_EXACT_MATCHES].some(
-              exact => nameLower === exact.toLowerCase()
-            );
-
-          // Check pattern matches
-          const isPatternMatch =
-            [...HAIR_PATTERNS, ...EYEBROW_PATTERNS].some(
-              pattern => nameLower.includes(pattern.toLowerCase())
-            );
-
-          if (isExactMatch || isPatternMatch) {
+          if (classification) {
             hairObjects.push(obj);
           }
         });

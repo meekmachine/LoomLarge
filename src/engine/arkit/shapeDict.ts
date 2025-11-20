@@ -591,3 +591,74 @@ export const HAIR_PATTERNS = [
 export const HAIR_EXACT_MATCHES = [
   'side_part_wavy',
 ] as const;
+
+/**
+ * Hair Object Type Definitions
+ * Maps common hair object names to their type (hair or eyebrow)
+ */
+export type HairObjectType = 'hair' | 'eyebrow';
+
+export const HAIR_OBJECT_REGISTRY: Record<string, HairObjectType> = {
+  // Common hair object names from Character Creator
+  'CC_Base_Hair': 'hair',
+  'Hair': 'hair',
+  'Ponytail': 'hair',
+  'Braid': 'hair',
+  'Bangs': 'hair',
+  'Sideburns': 'hair',
+  'Male_Bushy': 'eyebrow',
+  'Side_part_wavy': 'hair',
+
+  // Eyebrow variations
+  'Eyebrow_L': 'eyebrow',
+  'Eyebrow_R': 'eyebrow',
+  'Brow_L': 'eyebrow',
+  'Brow_R': 'eyebrow',
+  'LeftEyebrow': 'eyebrow',
+  'RightEyebrow': 'eyebrow',
+} as const;
+
+/**
+ * Helper function to determine if an object is hair or eyebrow
+ * Uses patterns and exact matches defined above
+ */
+export function classifyHairObject(name: string): HairObjectType | null {
+  const nameLower = name.toLowerCase();
+
+  // Check exact registry first (case-insensitive)
+  for (const [key, type] of Object.entries(HAIR_OBJECT_REGISTRY)) {
+    if (key.toLowerCase() === nameLower) {
+      return type;
+    }
+  }
+
+  // Check eyebrow patterns
+  for (const pattern of EYEBROW_PATTERNS) {
+    if (nameLower.includes(pattern.toLowerCase())) {
+      return 'eyebrow';
+    }
+  }
+
+  // Check eyebrow exact matches
+  for (const exact of EYEBROW_EXACT_MATCHES) {
+    if (nameLower === exact.toLowerCase()) {
+      return 'eyebrow';
+    }
+  }
+
+  // Check hair patterns
+  for (const pattern of HAIR_PATTERNS) {
+    if (nameLower.includes(pattern.toLowerCase())) {
+      return 'hair';
+    }
+  }
+
+  // Check hair exact matches
+  for (const exact of HAIR_EXACT_MATCHES) {
+    if (nameLower === exact.toLowerCase()) {
+      return 'hair';
+    }
+  }
+
+  return null;
+}

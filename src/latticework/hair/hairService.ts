@@ -11,6 +11,7 @@ import { createActor } from 'xstate';
 import { hairMachine } from './hairMachine';
 import { HairObjectRef, HairColor, HairEvent, HairState } from './types';
 import type { EngineThree } from '../../engine/EngineThree';
+import { classifyHairObject } from '../../engine/arkit/shapeDict';
 
 export class HairService {
   private actor: ReturnType<typeof createActor<typeof hairMachine>>;
@@ -41,14 +42,9 @@ export class HairService {
    */
   registerObjects(objects: THREE.Object3D[]) {
     this.objects = objects.map((obj) => {
-      // Detect if this is an eyebrow based on name
-      const nameLower = obj.name.toLowerCase();
-
-      // Check for eyebrow patterns (including "Male_Bushy" which are eyebrows)
-      const isEyebrow = nameLower.includes('eyebrow') ||
-                       nameLower.includes('brow') ||
-                       nameLower.includes('male_bushy') ||
-                       nameLower === 'male_bushy';
+      // Use centralized classification from shapeDict
+      const classification = classifyHairObject(obj.name);
+      const isEyebrow = classification === 'eyebrow';
 
       const ref: HairObjectRef = {
         name: obj.name,

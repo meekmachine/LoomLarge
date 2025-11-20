@@ -6,7 +6,6 @@ import Preloader from './components/Preloader';
 import { useThreeState } from './context/threeContext';
 import { ModulesProvider, useModulesContext } from './context/ModulesContext';
 import { createEyeHeadTrackingService } from './latticework/eyeHeadTracking/eyeHeadTrackingService';
-import { HairCustomizationPanel } from './components/hair/HairCustomizationPanel';
 import { HairService } from './latticework/hair/hairService';
 import './styles.css';
 
@@ -143,18 +142,9 @@ function AppContent() {
         isOpen={drawerOpen}
         onToggle={() => setDrawerOpen(!drawerOpen)}
         disabled={isLoading}
+        hairService={hairService}
       />
       <ModulesMenu animationManager={anim} />
-
-      {/* Hair Customization Panel - positioned in top right */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        right: '20px',
-        zIndex: 1000,
-      }}>
-        <HairCustomizationPanel hairService={hairService} />
-      </div>
     </div>
   );
 }

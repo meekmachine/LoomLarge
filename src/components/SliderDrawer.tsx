@@ -20,15 +20,18 @@ import AUSection from './au/AUSection';
 import VisemeSection from './au/VisemeSection';
 import TTSSection from './au/TTSSection';
 import EyeHeadTrackingSection from './au/EyeHeadTrackingSection';
+import HairSection from './au/HairSection';
 import DockableAccordionItem from './au/DockableAccordionItem';
 import PlaybackControls from './PlaybackControls';
 import { useThreeState } from '../context/threeContext';
 import type { NormalizedSnippet, CurvePoint } from '../latticework/animation/types';
+import { HairService } from '../latticework/hair/hairService';
 
 interface SliderDrawerProps {
   isOpen: boolean;
   onToggle: () => void;
   disabled?: boolean;
+  hairService?: HairService | null;
 }
 
 type Keyframe = { time: number; value: number };
@@ -51,7 +54,8 @@ function curvePointsToKeyframes(points: CurvePoint[]): Keyframe[] {
 export default function SliderDrawer({
   isOpen,
   onToggle,
-  disabled = false
+  disabled = false,
+  hairService
 }: SliderDrawerProps) {
   const { engine, anim, addFrameListener } = useThreeState();
 
@@ -322,6 +326,12 @@ export default function SliderDrawer({
               {/* Eye and Head Tracking Section */}
               <EyeHeadTrackingSection
                 engine={engine}
+                disabled={disabled}
+              />
+
+              {/* Hair & Eyebrows Section */}
+              <HairSection
+                hairService={hairService}
                 disabled={disabled}
               />
 
