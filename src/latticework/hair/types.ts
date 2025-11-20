@@ -3,9 +3,10 @@
  *
  * Defines the data structures for character hair and eyebrow customization.
  * Part of the latticework agency architecture.
+ *
+ * NOTE: This file is engine-agnostic and does not import Three.js types.
+ * All rendering is handled by EngineThree.
  */
-
-import * as THREE from 'three';
 
 /**
  * Hair/Eyebrow color configuration
@@ -129,15 +130,13 @@ export const DEFAULT_HAIR_STATE: HairState = {
 };
 
 /**
- * Hair object reference (Three.js objects)
+ * Hair object metadata (engine-agnostic)
+ * No Three.js types - just data needed for state management
  */
 export type HairObjectRef = {
   name: string;
-  object: THREE.Object3D;
-  mesh?: THREE.Mesh;
-  originalMaterial?: THREE.Material | THREE.Material[];
-  wireframe?: THREE.LineSegments;
   isEyebrow: boolean;  // true if this is an eyebrow, false if hair
+  isMesh: boolean;     // true if this object has mesh geometry
 };
 
 /**

@@ -2,16 +2,17 @@
  * Hair Service
  *
  * Service layer for managing hair customization.
- * Bridges the XState machine with EngineThree for Three.js updates.
+ * Bridges the XState machine with EngineThree for rendering updates.
  * Part of the latticework agency architecture.
+ *
+ * NOTE: This service is engine-agnostic - it does not import Three.js.
+ * All rendering operations are delegated to EngineThree.
  */
 
-import * as THREE from 'three';
 import { createActor } from 'xstate';
 import { hairMachine } from './hairMachine';
-import { HairObjectRef, HairColor, HairEvent, HairState } from './types';
+import { HairObjectRef, HairEvent, HairState } from './types';
 import type { EngineThree } from '../../engine/EngineThree';
-import { classifyHairObject } from '../../engine/arkit/shapeDict';
 
 export class HairService {
   private actor: ReturnType<typeof createActor<typeof hairMachine>>;
@@ -27,7 +28,7 @@ export class HairService {
     this.actor.subscribe((snapshot) => {
       const state = snapshot.context.state;
 
-      // Apply changes to Three.js objects
+      // Apply changes via engine
       this.applyStateToScene(state);
 
       // Notify subscribers
@@ -38,36 +39,19 @@ export class HairService {
   }
 
   /**
-   * Register hair/eyebrow objects from the Three.js scene
+   * Register hair/eyebrow objects from the scene
+   * Delegates all Three.js operations to EngineThree
    */
-  registerObjects(objects: THREE.Object3D[]) {
-    this.objects = objects.map((obj) => {
-      // Use centralized classification from shapeDict
-      const classification = classifyHairObject(obj.name);
-      const isEyebrow = classification === 'eyebrow';
+  registerObjects(objects: any[]) {
+    if (!this.engine) {
+      console.warn('[HairService] No engine available for registration');
+      return;
+    }
 
-      const ref: HairObjectRef = {
-        name: obj.name,
-        object: obj,
-        isEyebrow: isEyebrow,
-      };
+    // Delegate registration to engine - returns engine-agnostic metadata
+    this.objects = this.engine.registerHairObjects(objects);
 
-      // If it's a mesh, store reference to mesh and original material
-      if ((obj as THREE.Mesh).isMesh) {
-        const mesh = obj as THREE.Mesh;
-        ref.mesh = mesh;
-        ref.originalMaterial = mesh.material;
-      }
-
-      // Set render order to ensure hair renders on top of face
-      if (this.engine) {
-        this.engine.setHairRenderOrder(obj, isEyebrow);
-      }
-
-      return ref;
-    });
-
-    // Update machine context with objects
+    // Reset to default state
     this.actor.send({ type: 'RESET_TO_DEFAULT' } as HairEvent);
 
     // Apply initial state
@@ -97,105 +81,44 @@ export class HairService {
   }
 
   /**
-   * Apply the current state to the Three.js scene
+   * Apply the current state to the scene via EngineThree
+   * No direct Three.js manipulation - all operations delegated to engine
    */
   private applyStateToScene(state: HairState) {
+    if (!this.engine) return;
+
     this.objects.forEach((objRef) => {
-      const { mesh, object, isEyebrow } = objRef;
+      const { name, isEyebrow, isMesh } = objRef;
 
-      // Apply color - use eyebrowColor for eyebrows, hairColor for hair
-      if (mesh && mesh.material) {
-        const colorToApply = isEyebrow ? state.eyebrowColor : state.hairColor;
-        this.applyColorToMesh(mesh, colorToApply);
-      }
+      // Only apply to meshes
+      if (!isMesh) return;
 
-      // Apply outline
-      this.applyOutline(objRef, state.showOutline, state.outlineColor, state.outlineOpacity);
+      // Select color based on object type
+      const color = isEyebrow ? state.eyebrowColor : state.hairColor;
 
-      // Apply part-specific settings
-      const partState = state.parts[object.name];
-      if (partState) {
-        object.visible = partState.visible;
+      // Get part-specific state
+      const partState = state.parts[name];
 
-        if (partState.scale !== undefined) {
-          object.scale.setScalar(partState.scale);
-        }
+      // Build state object for engine
+      const objectState = {
+        color: {
+          baseColor: color.baseColor,
+          emissive: color.emissive,
+          emissiveIntensity: color.emissiveIntensity,
+        },
+        outline: {
+          show: state.showOutline,
+          color: state.outlineColor,
+          opacity: state.outlineOpacity,
+        },
+        visible: partState?.visible,
+        scale: partState?.scale,
+        position: partState?.position,
+      };
 
-        if (partState.position) {
-          const [x, y, z] = partState.position;
-          object.position.set(x, y, z);
-        }
-      }
+      // Delegate all rendering to engine
+      this.engine.applyHairStateToObject(name, objectState);
     });
-  }
-
-  /**
-   * Apply color to a hair mesh using EngineThree
-   */
-  private applyColorToMesh(mesh: THREE.Mesh, color: HairColor) {
-    if (this.engine) {
-      // Use EngineThree method for consistent Three.js operations
-      this.engine.setHairColor(mesh, color.baseColor, color.emissive, color.emissiveIntensity);
-    } else {
-      // Fallback: apply directly if engine not available
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-
-      materials.forEach((mat) => {
-        const standardMat = mat as THREE.MeshStandardMaterial;
-
-        if (standardMat.color !== undefined) {
-          standardMat.color = new THREE.Color(color.baseColor);
-        }
-
-        if (standardMat.emissive !== undefined) {
-          standardMat.emissive = new THREE.Color(color.emissive);
-          standardMat.emissiveIntensity = color.emissiveIntensity;
-        }
-      });
-    }
-  }
-
-  /**
-   * Apply or remove outline wireframe using EngineThree
-   */
-  private applyOutline(
-    objRef: HairObjectRef,
-    show: boolean,
-    color: string,
-    opacity: number
-  ) {
-    const { mesh } = objRef;
-    if (!mesh) return;
-
-    if (this.engine) {
-      // Use EngineThree method for consistent Three.js operations
-      const wireframe = this.engine.setHairOutline(mesh, show, color, opacity);
-      objRef.wireframe = wireframe;
-    } else {
-      // Fallback: apply directly if engine not available
-      // Remove existing wireframe if present
-      if (objRef.wireframe) {
-        mesh.remove(objRef.wireframe);
-        objRef.wireframe.geometry.dispose();
-        (objRef.wireframe.material as THREE.Material).dispose();
-        objRef.wireframe = undefined;
-      }
-
-      // Add wireframe if requested
-      if (show) {
-        const wireframeGeometry = new THREE.WireframeGeometry(mesh.geometry);
-        const wireframeMaterial = new THREE.LineBasicMaterial({
-          color: new THREE.Color(color),
-          linewidth: 2,
-          transparent: true,
-          opacity: opacity,
-        });
-        const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
-        wireframe.name = `${mesh.name}_wireframe`;
-        mesh.add(wireframe);
-        objRef.wireframe = wireframe;
-      }
-    }
   }
 
   /**
@@ -205,13 +128,8 @@ export class HairService {
     this.actor.stop();
     this.subscribers.clear();
 
-    // Clean up wireframes
-    this.objects.forEach((objRef) => {
-      if (objRef.wireframe && objRef.mesh) {
-        objRef.mesh.remove(objRef.wireframe);
-        objRef.wireframe.geometry.dispose();
-        (objRef.wireframe.material as THREE.Material).dispose();
-      }
-    });
+    // Engine handles all Three.js cleanup
+    // We just clear our references
+    this.objects = [];
   }
 }

@@ -16,7 +16,8 @@ import {
   EYE_AXIS,
   MIXED_AUS,
   AU_TO_COMPOSITE_MAP,
-  COMPOSITE_ROTATIONS
+  COMPOSITE_ROTATIONS,
+  classifyHairObject
 } from './arkit/shapeDict';
 
 const X_AXIS = new THREE.Vector3(1,0,0);
@@ -1010,6 +1011,91 @@ export class EngineThree {
         });
       }
     });
+  }
+
+  /**
+   * Register hair objects and return engine-agnostic metadata
+   * This method handles all Three.js-specific operations for hair registration
+   */
+  registerHairObjects(objects: THREE.Object3D[]): Array<{
+    name: string;
+    isEyebrow: boolean;
+    isMesh: boolean;
+  }> {
+    const metadata = objects.map((obj) => {
+      const isMesh = (obj as THREE.Mesh).isMesh || false;
+
+      // Classify using shapeDict
+      const classification = classifyHairObject(obj.name);
+      const isEyebrow = classification === 'eyebrow';
+
+      // Set render order
+      this.setHairRenderOrder(obj, isEyebrow);
+
+      return {
+        name: obj.name,
+        isEyebrow,
+        isMesh,
+      };
+    });
+
+    return metadata;
+  }
+
+  /**
+   * Apply hair state to scene objects by name
+   * This method handles all Three.js-specific operations for applying hair state
+   */
+  applyHairStateToObject(
+    objectName: string,
+    state: {
+      color: { baseColor: string; emissive: string; emissiveIntensity: number };
+      outline: { show: boolean; color: string; opacity: number };
+      visible?: boolean;
+      scale?: number;
+      position?: [number, number, number];
+    }
+  ): THREE.LineSegments | undefined {
+    // Find the object by name
+    const object = this.model?.getObjectByName(objectName);
+    if (!object) return undefined;
+
+    // Apply visibility
+    if (state.visible !== undefined) {
+      object.visible = state.visible;
+    }
+
+    // Apply scale
+    if (state.scale !== undefined) {
+      object.scale.setScalar(state.scale);
+    }
+
+    // Apply position
+    if (state.position) {
+      const [x, y, z] = state.position;
+      object.position.set(x, y, z);
+    }
+
+    // Apply color if it's a mesh
+    if ((object as THREE.Mesh).isMesh) {
+      const mesh = object as THREE.Mesh;
+      this.setHairColor(
+        mesh,
+        state.color.baseColor,
+        state.color.emissive,
+        state.color.emissiveIntensity
+      );
+
+      // Apply outline
+      return this.setHairOutline(
+        mesh,
+        state.outline.show,
+        state.outline.color,
+        state.outline.opacity
+      );
+    }
+
+    return undefined;
   }
 
   // ========================================
