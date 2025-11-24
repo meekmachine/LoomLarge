@@ -54,6 +54,7 @@ function coerceSnippet(d: NonNullable<LoadAnimationEvent['data']>, playing: bool
     lastLoopTime: typeof (d as any).lastLoopTime === 'number' ? (d as any).lastLoopTime : 0,
     snippetPlaybackRate: rate,
     snippetIntensityScale: typeof d.snippetIntensityScale === 'number' ? d.snippetIntensityScale : 1,
+    snippetBlendMode: (d as any).snippetBlendMode ?? 'replace',  // Default to 'replace'
     snippetCategory: (d as any).snippetCategory ?? 'default',
     snippetPriority: typeof (d as any).snippetPriority === 'number' ? (d as any).snippetPriority : 0,
     currentTime: 0,

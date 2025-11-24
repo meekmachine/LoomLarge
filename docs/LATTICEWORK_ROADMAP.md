@@ -1,6 +1,6 @@
 # Latticework Roadmap
 
-Latticework is the set of agencies inside `src/latticework/` that transform microphone and webcam signals into verbal and nonverbal behaviors for LoomLarge avatars. Each folder equals one agency. LoomLarge itself just loads the scene, exposes host capabilities (blendshape/bone control, audio playback), and lets these agencies run; it does not have its own animation logic.
+Latticework is the collection of agencies under `src/latticework/` that listen to live microphone and webcam streams, turn those signals into verbal and nonverbal cues, and drive the avatar through the 3D engine bindings exposed by LoomLarge. Each folder represents one self-contained agency: it owns its inputs, runs its state machine, and emits either animation curves/snippets or audio/text instructions. LoomLarge’s job is simply to load the scene and expose the engine controls; all behavior logic lives inside these agencies.
 
 ## Architectural Facts
 
@@ -48,7 +48,7 @@ Latticework is the set of agencies inside `src/latticework/` that transform micr
 2. **Memory & Knowledge**
    - Implement per-agent memory stores (vector + symbolic) with APIs that agencies call to fetch/commit context. No direct sharing; cross-agent info only flows via signals.
 3. **Conflict & Negotiation Scripts**
-   - Add programmable patterns inside `conversation/` (majority vote, weighted expertise) and ensure outputs remain curves/snippets/audio through the animation/TTS agencies.
+   - Add programmable patterns inside `conversation/` (majority vote, weighted expertise) and ensure outputs remain curves/snippets/audio through the animation/TTS agencies. The goal is complex multi-agent discourse emerging from cooperating agencies, not individual agencies doing everything.
 4. **Simulation Sandbox**
    - Headless runner that instantiates N agents + M humans, replays mic/webcam data, and records emitted cues for debugging. Include LiveKit-fed mic streams.
 5. **Docs**
@@ -75,4 +75,30 @@ Latticework is the set of agencies inside `src/latticework/` that transform micr
 - LiveKit integration lets agencies swap between local and remote sensor sources without code changes.
 - Animation agency remains the sole path for applying curves/snippets, with tests verifying other agencies only emit data.
 
-This roadmap replaces the previous drafts and removes the mistaken “history large” wording. The focus stays on the real code: each agency folder, how it handles mic/webcam inputs, and how its outputs feed the host engine through the animation agency.
+## “Virtual Humans” – Combined Chapter Plan
+
+Single book that spans LoomLarge + Latticework so readers can move from host setup to individual agencies. We selected the following references because they collectively cover cognition (Minsky), affect/emotion (The Emotion Machine), socially interactive behavior (Lugrin & Pelachaud), discourse analysis (Gumperz), perceptual science (Oxford Handbook of Facial Perception), and trait-based personality modeling (Cybernetic Big Five Theory). Each chapter cites the specific sections relevant to the agency it describes.
+
+1. **Chapter 0 – LoomLarge Project Setup** (repo layout, tooling, backend linkage). References: *Society of Mind* “Societies of Mind”, *Emotion Machine* “Resourcefulness”.
+2. **Chapter 1 – LoomLarge UI Weave** (panels, debug overlays, persona selectors). References: Lugrin & Pelachaud interface chapters, Gumperz “Conversational Inference”.
+3. **Chapter 2 – Engines & Mapping Lexicon** (EngineThree/Fiber/Babylon adapters, VRoid/RPM mappings). References: *Oxford Handbook* “Dynamic Facial Information”, Lugrin & Pelachaud embodiment chapters, CBFT traits.
+4. **Chapter 3 – Persona & Interaction Systems** (persona schemas, agency hooks, activation weights). References: *Emotion Machine* “Critics/Selectors”, *Society of Mind* “K-Lines”, CBFT literature.
+5. **Chapter 4 – Backend Orchestration & Remote Control** (Python backend, LiveKit streaming, remote directives). References: Gumperz “Contextualization Cues”, Lugrin & Pelachaud multimodal coordination.
+6. **Chapter 5 – Perceptor Agencies** (transcription, eye/head tracking, blink). References: *Oxford Handbook* perception chapters, Lugrin & Pelachaud “Multimodal Perception”.
+7. **Chapter 6 – Conversation Agency** (dialog management, signal routing). References: Gumperz discourse analysis, *Society of Mind* “Language Agents”.
+8. **Chapter 7 – Rapport Agency** (prosody alignment, empathy cues). References: Lugrin & Pelachaud rapport chapters, *Emotion Machine* critic-selector patterns, CBFT Agreeableness/Extraversion.
+9. **Chapter 8 – Strategic Interaction Agency** (negotiation, debate policies). References: *Society of Mind* “B- and C-brains”, *Emotion Machine* “Resourcefulness”, CBFT Conscientiousness/Openness.
+10. **Chapter 9 – Planner & Memory Agencies** (episodic/vector memory, scratchpads). References: *Society of Mind* “K-Lines”, *Emotion Machine* “Reflective Thinking”.
+11. **Chapter 10 – Director/Synthesizer & Animation Agency** (timeline blending, curve scheduling). References: *Society of Mind* master chapters, Lugrin & Pelachaud “Orchestrating Output”.
+12. **Chapter 11 – Tooling, Sandbox, and Ecosystem** (agency IDE, monitoring, plugin SDK). References: Lugrin & Pelachaud evaluation methodologies, *Emotion Machine* “Common Sense”.
+
+### Reference Rationale
+
+- **Marvin Minsky – *Society of Mind***: Provides the core metaphor for agencies cooperating through simple rules; we mirror its structure when describing how each Latticework agency behaves.
+- **Marvin Minsky – *The Emotion Machine***: Extends Society-of-Mind ideas into layered reasoning and emotional appraisal—useful for rapport, strategic interaction, and persona weighting.
+- **Birgit Lugrin & Catherine Pelachaud – *Handbook on Socially Interactive Agents***: Offers practical guidelines for UI, embodiment, rapport, evaluation, and multimodal coordination that map directly to our agencies.
+- **John Gumperz – *Discourse Strategies***: Supplies sociolinguistic insights (contextualization cues, conversational inference) needed to design the conversation, rapport, and strategic agencies.
+- ***Oxford Handbook of Facial Perception***: Gives perceptual science backing for eye/head tracking, visemes, and facial realism—critical for the animation, prosodic, and perceptor agencies.
+- **Cybernetic Big Five Theory (CBFT)**: Provides a trait-based framework for persona configuration and agency activation weights, ensuring our personality controls have psychological grounding.
+
+Each chapter will cite the files under discussion (e.g., `src/latticework/animation/README.md`) so the book doubles as accurate technical documentation grounded in the actual code.

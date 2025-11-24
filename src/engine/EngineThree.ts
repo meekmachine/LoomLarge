@@ -1288,22 +1288,18 @@ export class EngineThree {
 
       // Set base color
       if (standardMat.color !== undefined) {
-        standardMat.color = new THREE.Color(baseColor);
+        standardMat.color.set(baseColor);
       }
 
       // Set emissive glow
       if (standardMat.emissive !== undefined) {
-        standardMat.emissive = new THREE.Color(emissive);
+        standardMat.emissive.set(emissive);
         standardMat.emissiveIntensity = emissiveIntensity;
       }
-
-      // Ensure proper depth testing and writing
-      standardMat.depthTest = true;
-      standardMat.depthWrite = true;
     });
 
-    // Set renderOrder: eyebrows render first (lower value), hair renders later
-    // This ensures hair can occlude eyebrows when it overlaps
+    // Set renderOrder: hair renders after eyebrows (higher value = later)
+    // This ensures hair can properly layer over eyebrows
     mesh.renderOrder = isEyebrow ? 0 : 1;
   }
 
@@ -1357,6 +1353,14 @@ export class EngineThree {
       const classification = classifyHairObject(obj.name);
       const isEyebrow = classification === 'eyebrow';
 
+      // Set render order immediately during registration
+      // Eyebrows: renderOrder = 0 (renders first/underneath)
+      // Hair: renderOrder = 1 (renders after/on top)
+      if (isMesh) {
+        const mesh = obj as THREE.Mesh;
+        mesh.renderOrder = isEyebrow ? 0 : 1;
+      }
+
       return {
         name: obj.name,
         isEyebrow,
@@ -1370,6 +1374,7 @@ export class EngineThree {
   /**
    * Apply hair state to scene objects by name
    * This method handles all Three.js-specific operations for applying hair state
+   * NOTE: Handles objects with _1, _2, etc suffixes (e.g. Side_part_wavy_1, Side_part_wavy_2)
    */
   applyHairStateToObject(
     objectName: string,
@@ -1382,47 +1387,65 @@ export class EngineThree {
       isEyebrow?: boolean;
     }
   ): THREE.LineSegments | undefined {
-    // Find the object by name
-    const object = this.model?.getObjectByName(objectName);
-    if (!object) return undefined;
+    if (!this.model) return undefined;
 
-    // Apply visibility
-    if (state.visible !== undefined) {
-      object.visible = state.visible;
+    // Find ALL objects that match this name (handles _1, _2, etc. suffixes)
+    // For example: "Side_part_wavy" will match "Side_part_wavy_1" and "Side_part_wavy_2"
+    const matchingObjects: THREE.Object3D[] = [];
+
+    this.model.traverse((obj) => {
+      if (obj.name === objectName) {
+        matchingObjects.push(obj);
+      }
+    });
+
+    if (matchingObjects.length === 0) {
+      console.warn(`[EngineThree] applyHairStateToObject: No object found with name "${objectName}"`);
+      return undefined;
     }
 
-    // Apply scale
-    if (state.scale !== undefined) {
-      object.scale.setScalar(state.scale);
-    }
+    let lastOutline: THREE.LineSegments | undefined;
 
-    // Apply position
-    if (state.position) {
-      const [x, y, z] = state.position;
-      object.position.set(x, y, z);
-    }
+    // Apply state to all matching objects
+    matchingObjects.forEach((object) => {
+      // Apply visibility
+      if (state.visible !== undefined) {
+        object.visible = state.visible;
+      }
 
-    // Apply color if it's a mesh
-    if ((object as THREE.Mesh).isMesh) {
-      const mesh = object as THREE.Mesh;
-      this.setHairColor(
-        mesh,
-        state.color.baseColor,
-        state.color.emissive,
-        state.color.emissiveIntensity,
-        state.isEyebrow || false
-      );
+      // Apply scale
+      if (state.scale !== undefined) {
+        object.scale.setScalar(state.scale);
+      }
 
-      // Apply outline
-      return this.setHairOutline(
-        mesh,
-        state.outline.show,
-        state.outline.color,
-        state.outline.opacity
-      );
-    }
+      // Apply position
+      if (state.position) {
+        const [x, y, z] = state.position;
+        object.position.set(x, y, z);
+      }
 
-    return undefined;
+      // Apply color if it's a mesh
+      if ((object as THREE.Mesh).isMesh) {
+        const mesh = object as THREE.Mesh;
+        this.setHairColor(
+          mesh,
+          state.color.baseColor,
+          state.color.emissive,
+          state.color.emissiveIntensity,
+          state.isEyebrow || false
+        );
+
+        // Apply outline
+        lastOutline = this.setHairOutline(
+          mesh,
+          state.outline.show,
+          state.outline.color,
+          state.outline.opacity
+        );
+      }
+    });
+
+    return lastOutline;
   }
 
   /**

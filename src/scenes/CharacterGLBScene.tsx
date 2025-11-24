@@ -233,23 +233,88 @@ export default function CharacterGLBScene({
         // ============================================
         // HAIR DETECTION & SERVICE INITIALIZATION
         // ============================================
+        // Log ALL objects in the model to understand the full structure
+        console.group('[CharacterGLBScene] 🔍 FULL MODEL GEOMETRY INVENTORY');
+        const allObjects: any[] = [];
+        const meshObjects: any[] = [];
+        const boneObjects: any[] = [];
+        const groupObjects: any[] = [];
+
+        model.traverse((obj) => {
+          const objInfo = {
+            name: obj.name,
+            type: obj.type,
+            isMesh: (obj as THREE.Mesh).isMesh || false,
+            visible: obj.visible,
+            hasMaterial: !!(obj as THREE.Mesh).material,
+            hasGeometry: !!(obj as THREE.Mesh).geometry,
+          };
+
+          allObjects.push(objInfo);
+
+          // Categorize objects
+          if ((obj as THREE.Mesh).isMesh) {
+            const mesh = obj as THREE.Mesh;
+            meshObjects.push({
+              name: obj.name,
+              hasMorphTargets: Array.isArray(mesh.morphTargetInfluences) && mesh.morphTargetInfluences.length > 0,
+              morphCount: mesh.morphTargetInfluences?.length || 0,
+              materialType: Array.isArray(mesh.material) ? 'Array' : mesh.material?.type || 'Unknown',
+            });
+          } else if (obj.type === 'Bone') {
+            boneObjects.push({ name: obj.name });
+          } else if (obj.type === 'Group' || obj.type === 'Object3D') {
+            groupObjects.push({ name: obj.name, type: obj.type });
+          }
+        });
+
+        console.log(`Total objects in model: ${allObjects.length}`);
+        console.log(`- Meshes: ${meshObjects.length}`);
+        console.log(`- Bones: ${boneObjects.length}`);
+        console.log(`- Groups/Helpers: ${groupObjects.length}`);
+
+        console.group('📊 ALL OBJECTS:');
+        console.table(allObjects);
+        console.groupEnd();
+
+        console.group('🎨 MESH OBJECTS (renderable geometry):');
+        console.table(meshObjects);
+        console.groupEnd();
+
+        console.group('🦴 BONE OBJECTS:');
+        console.table(boneObjects);
+        console.groupEnd();
+
+        console.group('📦 GROUP/HELPER OBJECTS:');
+        console.table(groupObjects);
+        console.groupEnd();
+
+        console.groupEnd();
+
         // Automatically detect hair and eyebrow objects in the loaded model
         // Uses centralized classification from shapeDict.ts
         const hairObjects: THREE.Object3D[] = [];
 
+        console.group('[CharacterGLBScene] 🦱 HAIR OBJECT DETECTION');
         model.traverse((obj) => {
           // Use centralized classification helper
           const classification = classifyHairObject(obj.name);
 
           if (classification) {
+            console.log(`Found ${classification}: ${obj.name} (type: ${obj.type}, isMesh: ${(obj as THREE.Mesh).isMesh || false})`);
             hairObjects.push(obj);
           }
         });
+        console.log(`Total hair objects found: ${hairObjects.length}`);
+        console.groupEnd();
 
         // Initialize hair customization service if hair objects were found
         if (hairObjects.length > 0) {
           hairService = new HairService(engine);
           hairService.registerObjects(hairObjects);
+          console.log('[CharacterGLBScene] ✅ HairService initialized with', hairObjects.length, 'objects');
+        } else {
+          console.warn('[CharacterGLBScene] ⚠️ No hair objects detected in model');
         }
 
         // Center & scale to a reasonable size

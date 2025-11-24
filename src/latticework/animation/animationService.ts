@@ -244,16 +244,9 @@ export function createAnimationService(host: HostCaps){
         // newStartWallTime = now - (currentLocal / newRate) * 1000
         sn.startWallTime = now - (currentLocal / newRate) * 1000;
 
-        // Clear all running transitions in EngineThree so they don't interfere
-        try {
-          const engine = (host as any).engine ?? (window as any).facslib;
-          if (engine && typeof engine.clearTransitions === 'function') {
-            engine.clearTransitions();
-          }
-        } catch {}
-
-        // Immediately apply current values at the new timing
-        try { (impl as any).flushOnce?.(); } catch {}
+        // Note: Removed clearTransitions() and flushOnce() calls as they cause glitches
+        // The wall-clock anchoring above is sufficient to maintain smooth playback
+        // The next animation tick will automatically pick up the new rate
       }
 
       sn.snippetPlaybackRate = newRate;
@@ -264,7 +257,8 @@ export function createAnimationService(host: HostCaps){
       const sn = list.find(s => s?.name === name);
       if (!sn) return;
       sn.snippetIntensityScale = Math.max(0, Number.isFinite(scale) ? scale : 1);
-      try { (impl as any).flushOnce?.(); } catch {}
+      // Note: Removed flushOnce() call as it causes glitches by re-sampling ALL snippets
+      // The intensity change will be picked up naturally on the next animation tick
     },
     setSnippetPriority(name: string, priority: number){
       const st = (machine as any).getSnapshot?.() ?? null;
@@ -272,8 +266,7 @@ export function createAnimationService(host: HostCaps){
       const sn = list.find(s => s?.name === name);
       if (!sn) return;
       sn.snippetPriority = Number.isFinite(priority) ? priority : 0;
-      // No need to rebuild schedule immediately; priority applied on next tick/flush
-      try { (impl as any).flushOnce?.(); } catch {}
+      // Note: Priority change will be applied on next tick, no need to flush
     },
     setSnippetLoop(name: string, loop: boolean){
       const st = (machine as any).getSnapshot?.() ?? null;
@@ -305,11 +298,16 @@ export function createAnimationService(host: HostCaps){
         if (rt) rt.enabled = true;
       }
 
-      try { (impl as any).flushOnce?.(); } catch {}
+      // Note: Removed flushOnce() - state changes will be picked up on next tick
     },
     /** Convenience: seek local time within a snippet (seconds) */
     setSnippetTime(name: string, tSec: number){
-      try { (impl as any).seek?.(name, Math.max(0, tSec||0)); (impl as any).flushOnce?.(); } catch {}
+      try {
+        (impl as any).seek?.(name, Math.max(0, tSec||0));
+        // Note: flushOnce() kept here as scrubbing requires immediate visual feedback
+        // Unlike rate/intensity changes, seek operations are inherently discrete
+        (impl as any).flushOnce?.();
+      } catch {}
     },
     /** External frame step (seconds). ThreeProvider calls this each frame. */
     step(dtSec: number){

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Box,
   HStack,
@@ -354,17 +354,68 @@ export default function PlaybackControls() {
     anim?.setSnippetLoop?.(name, !currentLoop);
   }
 
-  function handleScrubTime(name: string, val: number) {
-    anim?.setSnippetTime?.(name, val);
-  }
+  // Debounce refs for all sliders to prevent glitching during drag
+  const scrubTimeTimers = useRef<Map<string, number>>(new Map());
+  const playbackRateTimers = useRef<Map<string, number>>(new Map());
+  const intensityTimers = useRef<Map<string, number>>(new Map());
 
-  function handlePlaybackRate(name: string, val: number) {
-    anim?.setSnippetPlaybackRate?.(name, val);
-  }
+  const handleScrubTime = useCallback((name: string, val: number) => {
+    // Clear existing timer for this snippet
+    const existingTimer = scrubTimeTimers.current.get(name);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
 
-  function handleIntensityScale(name: string, val: number) {
-    anim?.setSnippetIntensityScale?.(name, val);
-  }
+    // Use shorter debounce for scrubbing (8ms) for more responsive feedback
+    const timer = setTimeout(() => {
+      anim?.setSnippetTime?.(name, val);
+      scrubTimeTimers.current.delete(name);
+    }, 8);
+
+    scrubTimeTimers.current.set(name, timer);
+  }, [anim]);
+
+  // Immediate update for local state, debounced update for animation service
+  const handlePlaybackRate = useCallback((name: string, val: number) => {
+    // Clear existing timer for this snippet
+    const existingTimer = playbackRateTimers.current.get(name);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    // Set new debounced timer (16ms = ~1 frame at 60fps, smooth but not overwhelming)
+    const timer = setTimeout(() => {
+      anim?.setSnippetPlaybackRate?.(name, val);
+      playbackRateTimers.current.delete(name);
+    }, 16);
+
+    playbackRateTimers.current.set(name, timer);
+  }, [anim]);
+
+  const handleIntensityScale = useCallback((name: string, val: number) => {
+    // Clear existing timer for this snippet
+    const existingTimer = intensityTimers.current.get(name);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    // Set new debounced timer (16ms = ~1 frame at 60fps)
+    const timer = setTimeout(() => {
+      anim?.setSnippetIntensityScale?.(name, val);
+      intensityTimers.current.delete(name);
+    }, 16);
+
+    intensityTimers.current.set(name, timer);
+  }, [anim]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      scrubTimeTimers.current.forEach(timer => clearTimeout(timer));
+      playbackRateTimers.current.forEach(timer => clearTimeout(timer));
+      intensityTimers.current.forEach(timer => clearTimeout(timer));
+    };
+  }, []);
 
   function handleClearAll() {
     snippets.forEach(sn => {
