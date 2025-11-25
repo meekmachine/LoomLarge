@@ -12,6 +12,12 @@ interface HairPhysicsConfig {
   stiffness: number;      // Spring stiffness pulling back to center
   gravity: number;        // Gravity strength
   headInfluence: number;  // How much head movement affects hair
+  // Wind parameters
+  windStrength: number;   // Wind force strength (0-20)
+  windDirectionX: number; // Wind direction X component (-1 to 1)
+  windDirectionZ: number; // Wind direction Z component (-1 to 1)
+  windTurbulence: number; // Random turbulence amount (0-1)
+  windFrequency: number;  // Turbulence oscillation speed (0.5-5)
 }
 
 interface PendulumState {
@@ -33,8 +39,17 @@ export class HairPhysicsAmmo {
     damping: 0.3,
     stiffness: 5.0,
     gravity: 9.8,
-    headInfluence: 2.0
+    headInfluence: 2.0,
+    // Wind defaults (disabled)
+    windStrength: 0,
+    windDirectionX: 1.0,  // Default: wind from left
+    windDirectionZ: 0,
+    windTurbulence: 0.3,
+    windFrequency: 2.0,
   };
+
+  // Time accumulator for wind turbulence
+  private windTime = 0;
 
   private lastHeadYaw = 0;
   private lastHeadPitch = 0;
@@ -96,9 +111,39 @@ export class HairPhysicsAmmo {
     const dampingForceX = -this.velX * this.config.damping * 10;
     const dampingForceZ = -this.velZ * this.config.damping * 10;
 
+    // 5. Wind force - creates waving motion by oscillating the force direction
+    this.windTime += dt;
+    let windForceX = 0;
+    let windForceZ = 0;
+    if (this.config.windStrength > 0) {
+      // Primary wave oscillation - this is what makes hair wave back and forth
+      // The wind direction modulates between positive and negative
+      const primaryWave = Math.sin(this.windTime * this.config.windFrequency);
+
+      // Secondary waves for more natural, less mechanical motion
+      const secondaryWave = Math.sin(this.windTime * this.config.windFrequency * 1.7) * 0.3;
+      const tertiaryWave = Math.sin(this.windTime * this.config.windFrequency * 0.6) * 0.2;
+
+      // Combined wave creates the main oscillation (-1 to 1 range)
+      const waveStrength = primaryWave + secondaryWave + tertiaryWave;
+
+      // Apply wave along the wind direction axis
+      // This makes the hair swing back and forth IN the wind direction
+      const waveX = this.config.windDirectionX * waveStrength * this.config.windStrength;
+      const waveZ = this.config.windDirectionZ * waveStrength * this.config.windStrength;
+
+      // Add turbulence as random cross-wind gusts (perpendicular to main wind)
+      const turbulencePhase = this.windTime * this.config.windFrequency * 2.3;
+      const crossWindX = -this.config.windDirectionZ * Math.sin(turbulencePhase) * this.config.windTurbulence * this.config.windStrength * 0.5;
+      const crossWindZ = this.config.windDirectionX * Math.cos(turbulencePhase * 1.3) * this.config.windTurbulence * this.config.windStrength * 0.5;
+
+      windForceX = waveX + crossWindX;
+      windForceZ = waveZ + crossWindZ;
+    }
+
     // Total acceleration (F = ma, so a = F/m)
-    const accelX = (inertiaForceX + gravityFromYaw + springForceX + dampingForceX) / this.config.mass;
-    const accelZ = (inertiaForceZ + gravityFromPitch + springForceZ + dampingForceZ) / this.config.mass;
+    const accelX = (inertiaForceX + gravityFromYaw + springForceX + dampingForceX + windForceX) / this.config.mass;
+    const accelZ = (inertiaForceZ + gravityFromPitch + springForceZ + dampingForceZ + windForceZ) / this.config.mass;
 
     // Update velocity (v = v0 + a*dt)
     this.velX += accelX * dt;
@@ -162,6 +207,7 @@ export class HairPhysicsAmmo {
     this.velZ = 0;
     this.lastHeadYaw = 0;
     this.lastHeadPitch = 0;
+    this.windTime = 0;
   }
 
   /**

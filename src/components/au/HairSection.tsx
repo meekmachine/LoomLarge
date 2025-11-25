@@ -28,9 +28,16 @@ interface PhysicsConfig {
   stiffness: number;      // Spring stiffness (1-20)
   damping: number;        // Air resistance (0-1)
   inertia: number;        // Head influence (0-5)
-  gravity: number;        // Gravity strength (0-20)
+  gravity: number;        // Gravity strength (0-40)
+  responseScale: number;  // Amplification of physics to morphs (1-5)
   idleSwayAmount: number;
   idleSwaySpeed: number;
+  // Wind parameters
+  windStrength: number;   // Wind force strength (0-20)
+  windDirectionX: number; // Wind direction X (-1 to 1)
+  windDirectionZ: number; // Wind direction Z (-1 to 1)
+  windTurbulence: number; // Turbulence amount (0-1)
+  windFrequency: number;  // Turbulence speed (0.5-5)
 }
 
 export default function HairSection({ hairService, disabled = false }: HairSectionProps) {
@@ -583,7 +590,7 @@ export default function HairSection({ hairService, disabled = false }: HairSecti
                     value={physicsConfig.gravity ?? 9.8}
                     onChange={(v) => handlePhysicsConfigChange('gravity', v)}
                     min={0}
-                    max={20}
+                    max={40}
                     step={0.5}
                     isDisabled={disabled}
                     colorScheme="cyan"
@@ -593,6 +600,33 @@ export default function HairSection({ hairService, disabled = false }: HairSecti
                     </SliderTrack>
                     <SliderThumb />
                   </Slider>
+                </VStack>
+
+                {/* Response Scale - amplification of physics effect */}
+                <VStack align="stretch" spacing={1}>
+                  <HStack justify="space-between">
+                    <Text fontSize="xs" color="gray.50">Response Scale</Text>
+                    <Text fontSize="xs" color="gray.300">
+                      {(physicsConfig.responseScale ?? 2).toFixed(1)}x
+                    </Text>
+                  </HStack>
+                  <Slider
+                    value={physicsConfig.responseScale ?? 2}
+                    onChange={(v) => handlePhysicsConfigChange('responseScale', v)}
+                    min={1}
+                    max={5}
+                    step={0.25}
+                    isDisabled={disabled}
+                    colorScheme="yellow"
+                  >
+                    <SliderTrack>
+                      <SliderFilledTrack />
+                    </SliderTrack>
+                    <SliderThumb />
+                  </Slider>
+                  <Text fontSize="xs" color="gray.500">
+                    Higher = more dramatic hair movement
+                  </Text>
                 </VStack>
 
                 {/* Idle Sway Amount */}
@@ -642,6 +676,133 @@ export default function HairSection({ hairService, disabled = false }: HairSecti
                     <SliderThumb />
                   </Slider>
                 </VStack>
+
+                {/* Wind Simulation Section */}
+                <Box borderTop="1px solid" borderColor="whiteAlpha.200" pt={3} mt={2}>
+                  <Text fontSize="xs" fontWeight="bold" color="teal.300" mb={2}>
+                    WIND SIMULATION
+                  </Text>
+
+                  {/* Wind Strength */}
+                  <VStack align="stretch" spacing={1} mb={3}>
+                    <HStack justify="space-between">
+                      <Text fontSize="xs" color="gray.50">Wind Strength</Text>
+                      <Text fontSize="xs" color="gray.300">
+                        {(physicsConfig.windStrength ?? 0).toFixed(1)}
+                      </Text>
+                    </HStack>
+                    <Slider
+                      value={physicsConfig.windStrength ?? 0}
+                      onChange={(v) => handlePhysicsConfigChange('windStrength', v)}
+                      min={0}
+                      max={20}
+                      step={0.5}
+                      isDisabled={disabled}
+                      colorScheme="teal"
+                    >
+                      <SliderTrack>
+                        <SliderFilledTrack />
+                      </SliderTrack>
+                      <SliderThumb />
+                    </Slider>
+                  </VStack>
+
+                  {/* Wind Direction X */}
+                  <VStack align="stretch" spacing={1} mb={3}>
+                    <HStack justify="space-between">
+                      <Text fontSize="xs" color="gray.50">Direction (Left/Right)</Text>
+                      <Text fontSize="xs" color="gray.300">
+                        {(physicsConfig.windDirectionX ?? 1).toFixed(2)}
+                      </Text>
+                    </HStack>
+                    <Slider
+                      value={physicsConfig.windDirectionX ?? 1}
+                      onChange={(v) => handlePhysicsConfigChange('windDirectionX', v)}
+                      min={-1}
+                      max={1}
+                      step={0.1}
+                      isDisabled={disabled}
+                      colorScheme="teal"
+                    >
+                      <SliderTrack>
+                        <SliderFilledTrack />
+                      </SliderTrack>
+                      <SliderThumb />
+                    </Slider>
+                  </VStack>
+
+                  {/* Wind Direction Z */}
+                  <VStack align="stretch" spacing={1} mb={3}>
+                    <HStack justify="space-between">
+                      <Text fontSize="xs" color="gray.50">Direction (Front/Back)</Text>
+                      <Text fontSize="xs" color="gray.300">
+                        {(physicsConfig.windDirectionZ ?? 0).toFixed(2)}
+                      </Text>
+                    </HStack>
+                    <Slider
+                      value={physicsConfig.windDirectionZ ?? 0}
+                      onChange={(v) => handlePhysicsConfigChange('windDirectionZ', v)}
+                      min={-1}
+                      max={1}
+                      step={0.1}
+                      isDisabled={disabled}
+                      colorScheme="teal"
+                    >
+                      <SliderTrack>
+                        <SliderFilledTrack />
+                      </SliderTrack>
+                      <SliderThumb />
+                    </Slider>
+                  </VStack>
+
+                  {/* Wind Turbulence */}
+                  <VStack align="stretch" spacing={1} mb={3}>
+                    <HStack justify="space-between">
+                      <Text fontSize="xs" color="gray.50">Turbulence</Text>
+                      <Text fontSize="xs" color="gray.300">
+                        {(physicsConfig.windTurbulence ?? 0.3).toFixed(2)}
+                      </Text>
+                    </HStack>
+                    <Slider
+                      value={physicsConfig.windTurbulence ?? 0.3}
+                      onChange={(v) => handlePhysicsConfigChange('windTurbulence', v)}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      isDisabled={disabled}
+                      colorScheme="teal"
+                    >
+                      <SliderTrack>
+                        <SliderFilledTrack />
+                      </SliderTrack>
+                      <SliderThumb />
+                    </Slider>
+                  </VStack>
+
+                  {/* Wind Frequency */}
+                  <VStack align="stretch" spacing={1}>
+                    <HStack justify="space-between">
+                      <Text fontSize="xs" color="gray.50">Gust Speed</Text>
+                      <Text fontSize="xs" color="gray.300">
+                        {(physicsConfig.windFrequency ?? 2).toFixed(1)}
+                      </Text>
+                    </HStack>
+                    <Slider
+                      value={physicsConfig.windFrequency ?? 2}
+                      onChange={(v) => handlePhysicsConfigChange('windFrequency', v)}
+                      min={0.5}
+                      max={5}
+                      step={0.1}
+                      isDisabled={disabled}
+                      colorScheme="teal"
+                    >
+                      <SliderTrack>
+                        <SliderFilledTrack />
+                      </SliderTrack>
+                      <SliderThumb />
+                    </Slider>
+                  </VStack>
+                </Box>
               </VStack>
             )}
           </Box>

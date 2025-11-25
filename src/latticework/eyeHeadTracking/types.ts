@@ -54,6 +54,7 @@ export interface EyeHeadTrackingConfig {
   webcamActivationInterval?: number; // How often to activate webcam tracking (ms)
   engine?: any; // EngineThree for applying gaze directly
   animationAgency?: any; // Animation agency for scheduling approach
+  useAnimationAgency?: boolean; // Toggle: true = use animation agency, false = use direct engine calls
 
   // Coordination with mouth
   mouthSyncEnabled?: boolean; // Coordinate with speech/lip-sync
@@ -163,6 +164,9 @@ export const DEFAULT_EYE_HEAD_CONFIG = {
   returnToNeutralEnabled: false, // Disabled by default
   returnToNeutralDelay: 3000, // 3 seconds
   returnToNeutralDuration: 800, // 800ms for graceful return
+
+  // Animation backend
+  useAnimationAgency: true, // Default to animation agency when available
 };
 
 /**

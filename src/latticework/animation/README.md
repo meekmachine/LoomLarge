@@ -304,6 +304,17 @@ useEffect(() => {
 
 ---
 
+## Timing Model (Scheduler + Engine)
+
+- The scheduler no longer runs its own `requestAnimationFrame`. It is driven by an external clock (Three.js render loop) via `animationService.step(dt)`, which advances a simple `playTimeSec` counter.
+- Per-snippet timelines are derived from `RuntimeSched.startsAt` and `offset`, plus each snippet’s `snippetPlaybackRate`. Looping/clamping is handled in `computeLocalInfo` before targets are built.
+- The scheduler samples curve values and hands them to the host (EngineThree/EngineFour) using `transitionAU`/`transitionMorph` or continuum helpers. All interpolation/tween timing is handled inside the engine (Three.js `AnimationMixer` or equivalent), so the scheduler only decides **what** value to reach and **how long until the next keyframe**.
+- Natural completions are detected by comparing `playTimeSec` to each snippet’s duration; `onSnippetEnd` fires from the scheduler, but motion completion timing (tween end) comes from the engine.
+
+When integrating, ensure your render loop calls `animationService.step(dt)` every frame **before** `engine.update(dt)` so both stay in sync.
+
+---
+
 ## Testing Strategy
 
 Each layer can be tested independently:

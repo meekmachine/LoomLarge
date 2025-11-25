@@ -470,7 +470,10 @@ export class EyeHeadTrackingService {
     const applyEyes = options?.applyEyes ?? true;
     const applyHead = options?.applyHead ?? true;
     const scheduler = this.scheduler;
-    if (scheduler && this.config.animationAgency) {
+    const useAgency = this.config.useAnimationAgency ?? DEFAULT_EYE_HEAD_CONFIG.useAnimationAgency;
+
+    // Use animation agency if enabled AND available, otherwise use direct engine calls
+    if (useAgency && scheduler && this.config.animationAgency) {
       scheduler.scheduleGazeTransition(
         { x: adjustedX, y: adjustedY, z: 0 },
         {
@@ -482,6 +485,7 @@ export class EyeHeadTrackingService {
         }
       );
     } else if (this.config.engine) {
+      // Direct engine path - simpler, bypasses animation scheduler
       if (applyEyes && this.config.eyeTrackingEnabled) {
         const eyeYaw = adjustedX * eyeIntensity;
         const eyePitch = adjustedY * eyeIntensity;
@@ -555,7 +559,8 @@ export class EyeHeadTrackingService {
       const isAlreadyNeutral = Math.abs(x) < 0.01 && Math.abs(y) < 0.01;
 
       if (!isAlreadyNeutral) {
-        if (this.scheduler && this.config.animationAgency) {
+        const useAgency = this.config.useAnimationAgency ?? DEFAULT_EYE_HEAD_CONFIG.useAnimationAgency;
+        if (useAgency && this.scheduler && this.config.animationAgency) {
           this.scheduler.resetToNeutral(duration);
         } else if (this.config.engine) {
           if (this.config.eyeTrackingEnabled) {

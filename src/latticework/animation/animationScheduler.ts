@@ -108,12 +108,8 @@ export class AnimationScheduler {
   private host: HostCaps;
   private machine: any;
   private sched = new Map<string, RuntimeSched>();
-  private rafId: number | null = null;
   private playing = false;
-  private startWall = 0; // ms
-  private pausedAt = 0; // ms accumulated
   private playTimeSec = 0;
-  private useExternalStep = true;
   /** Track snippets already notified as completed to avoid duplicate callbacks */
   private ended = new Set<string>();
   /** Track current AU values for smooth continuity when scheduling new snippets */
@@ -123,26 +119,21 @@ export class AnimationScheduler {
   /** Detect and handle natural snippet completions (non-looping). Uses wall-clock anchoring. */
   private checkCompletions(tPlay: number) {
     const snippets = this.currentSnippets();
-    const now = this.now();
     for (const sn of snippets) {
       const name = sn.name || '';
       if (!name || this.ended.has(name)) continue;
-      if (!(sn as any).startWallTime) continue; // Skip if not initialized
-      const rate = sn.snippetPlaybackRate ?? 1;
-      const dur  = this.totalDuration(sn);
-      // Calculate local time using wall-clock anchor
-      const local = ((now - (sn as any).startWallTime) / 1000) * rate;
-      if (!sn.loop && dur > 0 && local >= dur) {
-        // Mark ended before mutating state to prevent reentrancy repeats
+      const info = this.computeLocalInfo(sn, tPlay);
+      if (!info) continue;
+      if (!sn.loop && info.duration > 0 && info.rawLocal >= info.duration) {
         this.ended.add(name);
-        // Set isPlaying to false so it stops contributing to targets
+        info.rt.enabled = false;
+        this.loopLocalTimes.delete(name);
         try {
           const st = this.machine.getSnapshot?.();
           const arr = st?.context?.animations as any[] || [];
           const snippet = arr.find((s:any) => s?.name === name);
           if (snippet) snippet.isPlaying = false;
         } catch {}
-        // Notify host
         try { this.host.onSnippetEnd?.(name); } catch {}
       }
     }
@@ -191,9 +182,44 @@ export class AnimationScheduler {
     return this.sched.get(snName)!;
   }
 
+  private computeLocalInfo(
+    sn: Snippet & { curves: Record<string, SchedulerCurvePoint[]> },
+    tPlay: number
+  ) {
+    const name = sn.name || '';
+    const rt = this.ensureSched(name);
+    if (!rt.enabled) return null;
+    const startAt = rt.startsAt ?? 0;
+    const offset = rt.offset ?? 0;
+    const rate = sn.snippetPlaybackRate ?? 1;
+    const duration = this.totalDuration(sn);
+    const elapsed = tPlay - startAt;
+    if (elapsed < 0) return null;
+    const rawLocal = offset + elapsed * rate;
+    let loopCount = 0;
+    let local = rawLocal;
+    if (sn.loop && duration > 0) {
+      loopCount = Math.floor(local / duration);
+      local = ((local % duration) + duration) % duration;
+    } else {
+      local = Math.min(duration, Math.max(0, local));
+    }
+    return { rt, startAt, offset, rate, duration, rawLocal, local, loopCount };
+  }
+
+  private refreshSnippetTimes(
+    snippets: Array<Snippet & { curves: Record<string, SchedulerCurvePoint[]> }>,
+    tPlay: number
+  ) {
+    snippets.forEach(sn => {
+      const info = this.computeLocalInfo(sn, tPlay);
+      if (!info) return;
+      (sn as any).currentTime = info.local;
+    });
+  }
+
   private buildTargetMap(snippets: Array<Snippet & { curves: Record<string, SchedulerCurvePoint[]> }>, tPlay: number, ignorePlayingState = false) {
     const targets = new Map<string, { v: number; pri: number; durMs: number; category: string }>();
-    const now = this.now();
 
     // Track additive contributions for each AU (all snippets with blendMode='additive' contribute)
     const additiveContributions = new Map<string, Array<{ snippet: string; v: number; pri: number }>>();
@@ -205,45 +231,29 @@ export class AnimationScheduler {
       // Honor per-snippet play state (VISOS parity) - unless explicitly ignoring
       if (!ignorePlayingState && sn && (sn as any).isPlaying === false) continue;
 
-      const rate = sn.snippetPlaybackRate ?? 1;
-      const dur = this.totalDuration(sn);
       const scale = sn.snippetIntensityScale ?? 1;
       const pri = typeof sn.snippetPriority === 'number' ? sn.snippetPriority : 0;
       const blendMode = (sn as any).snippetBlendMode ?? 'replace';
+      const info = this.computeLocalInfo(sn, tPlay);
+      if (!info) continue;
 
-      // Use wall-clock anchoring (old agency approach) - each snippet has independent timeline
-      if (!(sn as any).startWallTime) continue; // Skip if not initialized
-
-      let local = ((now - (sn as any).startWallTime) / 1000) * rate;
-      if (local < 0) local = 0;
-
-      // Handle looping and clamping
-      if (sn.loop && dur > 0) {
-        // Loop: wrap local time within [0, dur]
-        local = ((local % dur) + dur) % dur;
-      } else {
-        // Non-looping: clamp to [0, dur] and hold at end
-        local = Math.min(dur, Math.max(0, local));
-      }
-
-      this.handleLoopContinuity(sn, local, now, dur, rate);
+      this.handleLoopContinuity(sn, info.local, info.loopCount, info.duration);
 
       for (const [curveId, arr] of Object.entries(sn.curves || {})) {
         // Sample the curve at the current local time
-        // Apply logarithmic intensity scaling for better control at low values
-        const rawValue = sampleAt(arr, local);
+        const rawValue = sampleAt(arr, info.local);
         const scaled = applyIntensityScale(rawValue, scale);
         const v = clamp01(scaled);
 
         // Find next keyframe to calculate tween duration
-        let nextKfTime = dur; // default to end
+        let nextKfTime = info.duration; // default to end
         for (let i = 0; i < arr.length; i++) {
-          if (arr[i].time > local) {
+          if (arr[i].time > info.local) {
             nextKfTime = arr[i].time;
             break;
           }
         }
-        const timeToNext = (nextKfTime - local) / rate; // account for playback rate
+        const timeToNext = (nextKfTime - info.local) / info.rate;
         // Use smoother tween duration - longer min for smoother transitions, higher max for slower movements
         const durMs = Math.max(50, Math.min(1000, timeToNext * 1000)); // clamp between 50ms and 1000ms
         const prev = targets.get(curveId);
@@ -436,9 +446,8 @@ export class AnimationScheduler {
   private handleLoopContinuity(
     sn: Snippet & { curves: Record<string, SchedulerCurvePoint[]> },
     localTime: number,
-    now: number,
-    duration: number,
-    rate: number
+    loopCount: number,
+    duration: number
   ) {
     const key = sn.name || '__anon__';
 
@@ -447,14 +456,6 @@ export class AnimationScheduler {
       return;
     }
 
-    const startWall = (sn as any).startWallTime;
-    if (!startWall) {
-      this.loopLocalTimes.set(key, { local: localTime, loopCount: 0 });
-      return;
-    }
-
-    const elapsed = ((now - startWall) / 1000) * rate;
-    const loopCount = Math.floor(elapsed / duration);
     const prev = this.loopLocalTimes.get(key);
 
     if (prev && loopCount > prev.loopCount) {
@@ -517,44 +518,12 @@ export class AnimationScheduler {
     return null;
   }
 
-  private tick = () => {
-    if (!this.playing) {
-      this.rafId = null;
-      return;
-    }
-    const now = this.now();
-    const tPlay = this.useExternalStep ? this.playTimeSec : (now - this.startWall) / 1000;
-    // Handle natural completions before applying targets
-    this.checkCompletions(tPlay);
-    const targets = this.buildTargetMap(this.currentSnippets(), tPlay);
-
-    // Apply viseme morphs before AU continuum processing so they don't get mistaken for AUs
-    this.applyVisemeTargets(targets);
-
-    // Apply continuum-aware processing for composite bones (eyes, head, jaw, tongue)
-    this.applyContinuumTargets(targets);
-
-    this.rafId = typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame(this.tick) : null;
-  };
-
   load(snippet: Snippet) {
     // AUTOMATIC CONTINUITY: Apply current values to first keyframe (time=0) before loading
     // This ensures smooth transitions when snippets take over from other snippets
     const snWithContinuity = this.applyContinuity(snippet);
 
     this.safeSend({ type: 'LOAD_ANIMATION', data: snWithContinuity });
-
-    // Initialize startWallTime immediately for independent wall-clock anchoring
-    try {
-      const st = this.machine.getSnapshot?.();
-      const arr = st?.context?.animations as any[] || [];
-      const sn = arr.find((s:any) => s?.name === snWithContinuity.name);
-      if (sn && !sn.startWallTime) {
-        sn.startWallTime = this.now();
-        sn.isPlaying = true; // Auto-start when loaded
-        console.log('[Scheduler] load() initialized', snWithContinuity.name, 'startWallTime:', sn.startWallTime);
-      }
-    } catch {}
 
     return snWithContinuity.name;
   }
@@ -621,30 +590,9 @@ export class AnimationScheduler {
     if (typeof opts.priority === 'number') sn.snippetPriority = opts.priority;
     this.load(sn);
 
-    // Initialize startWallTime immediately (old agency parity)
-    // Each snippet needs its own wall-clock anchor for independent playback
-    try {
-      const st = this.machine.getSnapshot?.();
-      const arr = st?.context?.animations as any[] || [];
-      const snippet = arr.find((s:any) => s?.name === sn.name);
-      if (snippet && !snippet.startWallTime) {
-        const now = this.now();
-        const offsetSec = opts.offsetSec ?? 0;
-        const rate = snippet.snippetPlaybackRate ?? 1;
-        // Set startWallTime so that local time = offsetSec
-        // Formula: local = ((now - startWallTime) / 1000) * rate
-        // Solving: startWallTime = now - (offsetSec / rate) * 1000
-        snippet.startWallTime = now - (offsetSec / rate) * 1000;
-        snippet.isPlaying = true; // Auto-start when scheduled
-        console.log('[Scheduler] schedule() initialized', sn.name, 'startWallTime:', snippet.startWallTime, 'offsetSec:', offsetSec);
-      }
-    } catch {}
-
     const rt = this.ensureSched(sn.name || `sn_${Date.now()}`);
     // Play-time (seconds) since the last play() anchor. If not playing yet, treat as 0.
-    const tPlay = this.playing
-      ? (this.useExternalStep ? this.playTimeSec : (this.now() - this.startWall) / 1000)
-      : 0;
+    const tPlay = this.playing ? this.playTimeSec : 0;
     // Respect explicit startAtSec if provided; otherwise schedule relative to current play-time plus startInSec.
     const relStart = (typeof opts.startAtSec === 'number')
       ? Math.max(0, opts.startAtSec)
@@ -674,38 +622,20 @@ export class AnimationScheduler {
       const sn = arr.find((s:any) => s?.name === name);
       if (!sn) return;
 
-      // Old agency approach: adjust startWallTime to achieve the target local time
-      // Formula: currentTime = ((now - startWallTime) / 1000) * rate
-      // We want: currentTime = offsetSec
-      // So: startWallTime = now - (offsetSec / rate) * 1000
-      const now = this.now();
-      const rate = sn.snippetPlaybackRate ?? 1;
-      sn.startWallTime = now - (Math.max(0, offsetSec) / rate) * 1000;
+      const rt = this.ensureSched(name);
+      rt.startsAt = this.playTimeSec;
+      rt.offset = Math.max(0, offsetSec);
+      rt.enabled = true;
       sn.currentTime = Math.max(0, offsetSec);
-
-      console.log('[Scheduler] seek()', name, 'to', offsetSec.toFixed(3),
-                  'rate:', rate, 'startWallTime:', sn.startWallTime);
-
-      // If seeking on a completed snippet, re-enable it
-      if (this.ended.has(name)) {
-        this.ended.delete(name);
-        sn.isPlaying = true;
-      }
+      this.ended.delete(name);
+      sn.isPlaying = true;
+      console.log('[Scheduler] seek()', name, 'to', offsetSec.toFixed(3));
     } catch {}
   }
 
   play() {
     if (this.playing) return;
     this.playing = true;
-    // Reset playTimeSec if starting from stopped
-    if (this.useExternalStep) {
-      if (this.playTimeSec === 0) this.playTimeSec = 0;
-      // external clock will drive playTimeSec via step(dt)
-    } else {
-      const now = this.now();
-      this.startWall = now - this.pausedAt;
-      if (this.rafId == null) this.rafId = requestAnimationFrame(this.tick);
-    }
     // Ensure state machine is playing before any tick
     this.safeSend({ type: 'PLAY_ALL' });
   }
@@ -713,35 +643,26 @@ export class AnimationScheduler {
   pause() {
     if (!this.playing) return;
     this.playing = false;
-    const now = this.now();
-    this.pausedAt = now - this.startWall;
-    if (this.rafId != null) {
-      cancelAnimationFrame(this.rafId as any);
-      this.rafId = null;
-    }
     this.safeSend({ type: 'PAUSE_ALL' });
   }
 
   stop() {
     this.playing = false;
     this.playTimeSec = 0;
-    this.pausedAt = 0;
     // Clear all scheduled snippets
     this.sched.forEach((r) => { r.enabled = false; r.startsAt = 0; r.offset = 0; });
     this.loopLocalTimes.clear();
-    if (this.rafId != null) {
-      cancelAnimationFrame(this.rafId as any);
-      this.rafId = null;
-    }
     this.safeSend({ type: 'STOP_ALL' });
   }
 
   flushOnce() {
     // Use current playback time for correct sampling
-    const tPlay = this.useExternalStep ? this.playTimeSec : (this.now() - this.startWall) / 1000;
+    const tPlay = this.playTimeSec;
     console.log('[Scheduler] flushOnce() tPlay:', (tPlay ?? 0).toFixed(3));
+    const snippets = this.currentSnippets();
+    this.refreshSnippetTimes(snippets, tPlay);
     // Ignore playing state when flushing - we want to show the scrubbed position even for paused snippets
-    const targets = this.buildTargetMap(this.currentSnippets(), tPlay, true);
+    const targets = this.buildTargetMap(snippets, tPlay, true);
     console.log('[Scheduler] flushOnce() targets:', targets.size);
     targets.forEach((entry, curveId) => {
       console.log('  -', curveId, '=', (entry.v ?? 0).toFixed(3), 'pri:', entry.pri, 'dur:', (entry.durMs ?? 0).toFixed(1), 'ms');
@@ -752,60 +673,23 @@ export class AnimationScheduler {
     this.applyContinuumTargets(targets);
   }
 
-  /** Drive the scheduler from an external clock (preferred, VISOS parity). */
+  /** Drive the scheduler from the external Three.js clock. */
   step(dtSec: number){
-    if (!this.useExternalStep || !this.playing) {
-      return;
-    }
+    if (!this.playing) return;
+    const dt = Math.max(0, dtSec || 0);
+    if (!Number.isFinite(dt) || dt <= 0) return;
 
     const snippets = this.currentSnippets();
-    // Early exit if no snippets loaded - no work to do
     if (!snippets.length) return;
 
-    this.playTimeSec += Math.max(0, dtSec || 0);
+    this.playTimeSec += dt;
     const tPlay = this.playTimeSec;
-    // Handle natural completions before applying targets
     this.checkCompletions(tPlay);
-    // Only tick if playing
+    this.refreshSnippetTimes(snippets, tPlay);
     if (!this.playing) return;
 
-    // Update currentTime for each snippet using wall-clock anchoring (old agency approach)
-    // Each snippet independently tracks its own timeline via startWallTime
-    const now = this.now();
-    snippets.forEach(sn => {
-      // Skip updating currentTime for paused snippets
-      if (!(sn as any).isPlaying) return;
-
-      // Initialize startWallTime if not set (should rarely happen now that machine initializes it)
-      if (!(sn as any).startWallTime) {
-        (sn as any).startWallTime = now;
-      }
-
-      const rate = sn.snippetPlaybackRate ?? 1;
-      const dur = this.totalDuration(sn);
-
-      // Calculate local time from wall-clock anchor
-      let local = ((now - (sn as any).startWallTime) / 1000) * rate;
-      if (local < 0) local = 0;
-
-      // Handle looping and clamping (same logic as buildTargetMap)
-      if (sn.loop && dur > 0) {
-        // Loop: wrap local time within [0, dur]
-        local = ((local % dur) + dur) % dur;
-      } else {
-        // Non-looping: clamp to [0, dur] and hold at end
-        local = Math.min(dur, Math.max(0, local));
-      }
-
-      (sn as any).currentTime = local;
-    });
-
     const targets = this.buildTargetMap(snippets, tPlay);
-
-    // Apply viseme morph targets first. Remaining entries are AU/morph keys for continuum logic.
     this.applyVisemeTargets(targets);
-
-    // Apply continuum-aware processing for AU targets (eyes, head, jaw, tongue, etc.)
     this.applyContinuumTargets(targets);
   }
 
@@ -854,25 +738,13 @@ export class AnimationScheduler {
   /** Introspection: snapshot of current schedule with computed local times. */
   getScheduleSnapshot() {
     const snippets = this.currentSnippets();
-    const now = this.now();
     return snippets.map(sn => {
       const name = sn.name || '';
       const rt = this.ensureSched(name);
       const rate = sn.snippetPlaybackRate ?? 1;
       const dur  = this.totalDuration(sn);
-
-      // Use wall-clock anchoring for accurate independent timing
-      let local = 0;
-      if ((sn as any).startWallTime) {
-        local = ((now - (sn as any).startWallTime) / 1000) * rate;
-        if (local < 0) local = 0;
-        // Handle looping
-        if (sn.loop && dur > 0) {
-          local = ((local % dur) + dur) % dur;
-        } else {
-          local = Math.min(dur, Math.max(0, local));
-        }
-      }
+      const info = this.computeLocalInfo(sn, this.playTimeSec);
+      const local = info ? info.local : 0;
 
       return {
         name,

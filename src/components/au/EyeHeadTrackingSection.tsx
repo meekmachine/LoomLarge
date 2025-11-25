@@ -42,6 +42,7 @@ export default function EyeHeadTrackingSection({ engine, disabled = false }: Eye
   const [headBlendWeight, setHeadBlendWeight] = useState(0.7);
   const [followSpeed, setFollowSpeed] = useState(0.5);
   const [mouseThrottleMs, setMouseThrottleMs] = useState(100);
+  const [useAnimationAgency, setUseAnimationAgency] = useState(true);
 
   // Initialize service config on mount to match UI state
   useEffect(() => {
@@ -57,8 +58,7 @@ export default function EyeHeadTrackingSection({ engine, disabled = false }: Eye
       headFollowDelay,
       returnToNeutralEnabled,
       returnToNeutralDelay,
-      followSpeed,
-      mouseThrottleMs,
+      useAnimationAgency,
     });
     eyeHeadTrackingService.setEyeBlendWeight(eyeBlendWeight);
     eyeHeadTrackingService.setHeadBlendWeight(headBlendWeight);
@@ -592,6 +592,57 @@ export default function EyeHeadTrackingSection({ engine, disabled = false }: Eye
                 Adjust balance of morph overlay vs. bone rotation for head turns
               </Text>
             </VStack>
+          </VStack>
+        </Box>
+
+        {/* Animation Backend Toggle */}
+        <Box pt={4} borderTop="1px" borderColor="gray.700">
+          <Text fontSize="sm" fontWeight="bold" mb={3} color="gray.300">
+            Animation Backend
+          </Text>
+          <VStack spacing={2} align="stretch">
+            <HStack justify="space-between" bg={useAnimationAgency ? 'teal.900' : 'gray.800'} p={2} borderRadius="md">
+              <VStack align="start" spacing={0}>
+                <Text fontSize="xs" color={useAnimationAgency ? 'teal.100' : 'gray.400'}>
+                  Animation Agency (Scheduler)
+                </Text>
+                <Text fontSize="xs" color="gray.500">
+                  Priority blending, smooth transitions
+                </Text>
+              </VStack>
+              <Switch
+                isChecked={useAnimationAgency}
+                onChange={(e) => {
+                  const enabled = e.target.checked;
+                  setUseAnimationAgency(enabled);
+                  handleConfigChange({ useAnimationAgency: enabled });
+                }}
+                size="sm"
+                colorScheme="teal"
+                isDisabled={disabled}
+              />
+            </HStack>
+            <HStack justify="space-between" bg={!useAnimationAgency ? 'orange.900' : 'gray.800'} p={2} borderRadius="md">
+              <VStack align="start" spacing={0}>
+                <Text fontSize="xs" color={!useAnimationAgency ? 'orange.100' : 'gray.400'}>
+                  Direct Engine
+                </Text>
+                <Text fontSize="xs" color="gray.500">
+                  Simpler, bypasses scheduler
+                </Text>
+              </VStack>
+              <Switch
+                isChecked={!useAnimationAgency}
+                onChange={(e) => {
+                  const enabled = !e.target.checked;
+                  setUseAnimationAgency(enabled);
+                  handleConfigChange({ useAnimationAgency: enabled });
+                }}
+                size="sm"
+                colorScheme="orange"
+                isDisabled={disabled}
+              />
+            </HStack>
           </VStack>
         </Box>
 

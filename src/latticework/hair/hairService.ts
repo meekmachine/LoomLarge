@@ -23,9 +23,16 @@ interface HairPhysicsConfig {
   damping: number;        // Air resistance (0-1)
   // Response parameters
   inertia: number;        // How much head movement affects hair (0-5)
-  gravity: number;        // Gravity strength (0-20)
+  gravity: number;        // Gravity strength (0-40)
+  responseScale: number;  // Amplification of physics to morphs (1-5)
   idleSwayAmount: number; // Subtle idle animation amplitude (0-1)
   idleSwaySpeed: number;  // Idle sway frequency
+  // Wind parameters
+  windStrength: number;   // Wind force strength (0-20)
+  windDirectionX: number; // Wind direction X (-1 to 1)
+  windDirectionZ: number; // Wind direction Z (-1 to 1)
+  windTurbulence: number; // Turbulence amount (0-1)
+  windFrequency: number;  // Turbulence speed (0.5-5)
 }
 
 // Hair physics state (for tracking)
@@ -34,6 +41,8 @@ interface HairPhysicsState {
   left: number;
   right: number;
   front: number;
+  fluffyRight: number;
+  fluffyBottom: number;
   // Time tracking
   lastUpdateTime: number;
   idlePhase: number;
@@ -53,13 +62,22 @@ export class HairService {
     damping: 0.3,          // Air resistance
     inertia: 3.0,          // Head influence multiplier
     gravity: 9.8,          // Gravity
+    responseScale: 2.0,    // Amplification factor for morph output
     idleSwayAmount: 0.25,  // More visible idle sway
-    idleSwaySpeed: 0.8     // Moderate sway speed
+    idleSwaySpeed: 0.8,    // Moderate sway speed
+    // Wind defaults (disabled)
+    windStrength: 0,
+    windDirectionX: 1.0,   // Default: wind from left
+    windDirectionZ: 0,
+    windTurbulence: 0.3,
+    windFrequency: 2.0,
   };
   private physicsState: HairPhysicsState = {
     left: 0,
     right: 0,
     front: 0,
+    fluffyRight: 0,
+    fluffyBottom: 0,
     lastUpdateTime: 0,
     idlePhase: 0
   };
@@ -296,9 +314,10 @@ export class HairService {
         // Add idle sway
         const idleSway = Math.sin(this.physicsState.idlePhase * Math.PI * 2) * this.physicsConfig.idleSwayAmount;
 
-        // Amplify the physics output for more visible effect
-        const amplifiedX = state.x * 2;
-        const amplifiedZ = state.z * 2;
+        // Amplify the physics output using configurable responseScale
+        const scale = this.physicsConfig.responseScale;
+        const amplifiedX = state.x * scale;
+        const amplifiedZ = state.z * scale;
         const horizontal = amplifiedX + idleSway;
 
         // Convert to left/right morphs (values 0-1)
@@ -306,22 +325,36 @@ export class HairService {
         const rightValue = Math.max(0, Math.min(1, horizontal < 0 ? -horizontal : 0));
 
         // Front: positive z means hair moved forward (gravity effect)
-        const frontValue = Math.max(0, Math.min(1, amplifiedZ * 0.5 + 0.15));
+        // No baseline offset - only move when there's actual physics input
+        const frontValue = Math.max(0, Math.min(1, amplifiedZ * 0.5));
+
+        // Fluffy_Right: adds volume when moving right, modulated by horizontal movement
+        // This creates a fuller look when hair swings to the right
+        const fluffyRightValue = Math.max(0, Math.min(1, rightValue * 0.7));
+
+        // Fluffy_Bottom_ALL: adds volume to bottom, modulated by movement intensity
+        // No baseline offset - only activate when there's actual movement
+        const movementIntensity = Math.abs(horizontal) + Math.abs(amplifiedZ);
+        const fluffyBottomValue = Math.max(0, Math.min(1, movementIntensity * 0.25));
 
         // Debug logging (throttled)
         if (Math.random() < 0.02) {
-          console.log(`[HairPhysics] x=${state.x.toFixed(3)} z=${state.z.toFixed(3)} → L=${leftValue.toFixed(2)} R=${rightValue.toFixed(2)} F=${frontValue.toFixed(2)}`);
+          console.log(`[HairPhysics] x=${state.x.toFixed(3)} z=${state.z.toFixed(3)} → L=${leftValue.toFixed(2)} R=${rightValue.toFixed(2)} F=${frontValue.toFixed(2)} FR=${fluffyRightValue.toFixed(2)} FB=${fluffyBottomValue.toFixed(2)}`);
         }
 
         // Store state
         this.physicsState.left = leftValue;
         this.physicsState.right = rightValue;
         this.physicsState.front = frontValue;
+        this.physicsState.fluffyRight = fluffyRightValue;
+        this.physicsState.fluffyBottom = fluffyBottomValue;
 
         // Apply to morphs
         this.setHairMorph('L_Hair_Left', leftValue);
         this.setHairMorph('L_Hair_Right', rightValue);
         this.setHairMorph('L_Hair_Front', frontValue);
+        this.setHairMorph('Fluffy_Right', fluffyRightValue);
+        this.setHairMorph('Fluffy_Bottom_ALL', fluffyBottomValue);
       });
     }
 
@@ -350,7 +383,13 @@ export class HairService {
       stiffness: this.physicsConfig.stiffness,
       damping: this.physicsConfig.damping,
       headInfluence: this.physicsConfig.inertia,
-      gravity: this.physicsConfig.gravity
+      gravity: this.physicsConfig.gravity,
+      // Wind parameters
+      windStrength: this.physicsConfig.windStrength,
+      windDirectionX: this.physicsConfig.windDirectionX,
+      windDirectionZ: this.physicsConfig.windDirectionZ,
+      windTurbulence: this.physicsConfig.windTurbulence,
+      windFrequency: this.physicsConfig.windFrequency,
     });
   }
 
@@ -376,11 +415,15 @@ export class HairService {
     this.setHairMorph('L_Hair_Left', 0);
     this.setHairMorph('L_Hair_Right', 0);
     this.setHairMorph('L_Hair_Front', 0);
+    this.setHairMorph('Fluffy_Right', 0);
+    this.setHairMorph('Fluffy_Bottom_ALL', 0);
 
     this.physicsState = {
       left: 0,
       right: 0,
       front: 0,
+      fluffyRight: 0,
+      fluffyBottom: 0,
       lastUpdateTime: 0,
       idlePhase: 0
     };
@@ -454,10 +497,19 @@ export class HairService {
     const leftValue = Math.max(0, Math.min(1, horizontal > 0 ? horizontal : 0));
     const rightValue = Math.max(0, Math.min(1, horizontal < 0 ? -horizontal : 0));
 
+    // Fluffy_Right: adds volume when moving right
+    const fluffyRightValue = Math.max(0, Math.min(1, rightValue * 0.7));
+
+    // Fluffy_Bottom_ALL: adds volume to bottom, modulated to lesser degree
+    const movementIntensity = Math.abs(horizontal) + Math.abs(frontValue);
+    const fluffyBottomValue = Math.max(0, Math.min(1, movementIntensity * 0.25 + 0.1));
+
     // Apply
     this.setHairMorph('L_Hair_Left', leftValue);
     this.setHairMorph('L_Hair_Right', rightValue);
     this.setHairMorph('L_Hair_Front', frontValue);
+    this.setHairMorph('Fluffy_Right', fluffyRightValue);
+    this.setHairMorph('Fluffy_Bottom_ALL', fluffyBottomValue);
   }
 
   /**
