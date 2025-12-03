@@ -11,9 +11,8 @@ import {
   VStack,
   HStack
 } from '@chakra-ui/react';
-import { EngineThree } from '../../engine/EngineThree';
+import { EngineThree, MIXED_AUS } from '../../engine/EngineThree';
 import { EngineFour } from '../../engine/EngineFour';
-import { MIXED_AUS } from '../../engine/arkit/shapeDict';
 
 interface AUSliderProps {
   au: string | number;

@@ -411,7 +411,8 @@ export default function PlaybackControls() {
 
   // Mixer / blending metadata updater (stored on snippet)
   const handleMixerParams = useCallback((name: string, params: any) => {
-    anim?.setSnippetMixerParams?.(name, params);
+    // TODO: Implement setSnippetMixerParams in EngineFour
+    // anim?.setSnippetMixerParams?.(name, params);
   }, [anim]);
 
   // Cleanup timers on unmount
@@ -870,7 +871,7 @@ export default function PlaybackControls() {
                                         <Select
                                           size="sm"
                                           value={sn.snippetBlendMode || 'replace'}
-                                          onChange={(e) => anim?.setSnippetBlendMode?.(sn.name, e.target.value)}
+                                          onChange={(e) => { /* TODO: anim?.setSnippetBlendMode?.(sn.name, e.target.value) */ }}
                                         >
                                           <option value="replace">Replace</option>
                                           <option value="additive">Additive</option>

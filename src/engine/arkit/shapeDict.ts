@@ -73,101 +73,9 @@ export const AU_TO_MORPHS: Record<number, string[]> = {
   72: ['Eye_R_Look_Down'],
 };
 
-// Fallback name variants to handle vendor/export naming drift.
-export const MORPH_VARIANTS: Record<string, string[]> = {
-  'Mouth_Smile_L': ['mouthSmileLeft','MouthSmileLeft','smileLeft','Smile_L'],
-  'Mouth_Smile_R': ['mouthSmileRight','MouthSmileRight','smileRight','Smile_R'],
-
-  'Mouth_Frown_L': ['mouthFrownLeft','MouthFrownLeft','frownLeft'],
-  'Mouth_Frown_R': ['mouthFrownRight','MouthFrownRight','frownRight'],
-
-  'Mouth_Press_L': ['mouthPressLeft','MouthPressLeft','Mouth_Tightener_L','lipTightenerLeft'],
-  'Mouth_Press_R': ['mouthPressRight','MouthPressRight','Mouth_Tightener_R','lipTightenerRight'],
-
-  'Mouth_Funnel':  ['mouthFunnel','MouthFunneler','LipFunnel','funnel'],
-  'Mouth_Pucker':  ['mouthPucker','LipPucker','pucker'],
-
-  'Mouth_Roll_In_Upper': ['mouthRollInUpper','LipRollInUpper'],
-  'Mouth_Roll_In_Lower': ['mouthRollInLower','LipRollInLower'],
-
-  'Mouth_Up_Upper_L': ['upperLipUpLeft','UpperLipRaiseLeft'],
-  'Mouth_Up_Upper_R': ['upperLipUpRight','UpperLipRaiseRight'],
-  'Mouth_Down_Lower_L': ['lowerLipDownLeft','LowerLipDepressLeft'],
-  'Mouth_Down_Lower_R': ['lowerLipDownRight','LowerLipDepressRight'],
-
-  'Mouth_Stretch_L': ['mouthStretchLeft','LipStretcherLeft'],
-  'Mouth_Stretch_R': ['mouthStretchRight','LipStretcherRight'],
-
-  'Eye_Blink_L': ['eyeBlinkLeft','blinkLeft','Blink_L','BLINK_L','leftBlink'],
-  'Eye_Blink_R': ['eyeBlinkRight','blinkRight','Blink_R','BLINK_R','rightBlink'],
-  'Eye_Squint_L': ['eyeSquintLeft','squintLeft','Squint_L'],
-  'Eye_Squint_R': ['eyeSquintRight','squintRight','Squint_R'],
-  'Eye_Wide_L':   ['eyeWideLeft','eyesWideLeft','Wide_L'],
-  'Eye_Wide_R':   ['eyeWideRight','eyesWideRight','Wide_R'],
-
-  'Eye_L_Look_L':   ['eyeLeftLookLeft','eyesLeftLookLeft','EyeLeftLookLeft','LeftEyeLookLeft'],
-  'Eye_L_Look_R':   ['eyeLeftLookRight','eyesLeftLookRight','EyeLeftLookRight','LeftEyeLookRight'],
-  'Eye_L_Look_Up':  ['eyeLeftLookUp','eyesLeftLookUp','EyeLeftLookUp','LeftEyeLookUp'],
-  'Eye_L_Look_Down':['eyeLeftLookDown','eyesLeftLookDown','EyeLeftLookDown','LeftEyeLookDown'],
-  'Eye_R_Look_L':   ['eyeRightLookLeft','eyesRightLookLeft','EyeRightLookLeft','RightEyeLookLeft'],
-  'Eye_R_Look_R':   ['eyeRightLookRight','eyesRightLookRight','EyeRightLookRight','RightEyeLookRight'],
-  'Eye_R_Look_Up':  ['eyeRightLookUp','eyesRightLookUp','EyeRightLookUp','RightEyeLookUp'],
-  'Eye_R_Look_Down':['eyeRightLookDown','eyesRightLookDown','EyeRightLookDown','RightEyeLookDown'],
-
-  'Brow_Raise_Inner_L': ['innerBrowRaiseLeft','browRaiseInnerLeft'],
-  'Brow_Raise_Inner_R': ['innerBrowRaiseRight','browRaiseInnerRight'],
-  'Brow_Raise_Outer_L': ['outerBrowRaiseLeft','browRaiseOuterLeft'],
-  'Brow_Raise_Outer_R': ['outerBrowRaiseRight','browRaiseOuterRight'],
-  'Brow_Drop_L':        ['browLowerLeft','corrugatorLeft'],
-  'Brow_Drop_R':        ['browLowerRight','corrugatorRight'],
-
-  'Nose_Sneer_L': ['noseSneerLeft','sneerLeft'],
-  'Nose_Sneer_R': ['noseSneerRight','sneerRight'],
-  'Cheek_Puff_L': ['cheekPuffLeft','puffLeft'],
-  'Cheek_Puff_R': ['cheekPuffRight','puffRight'],
-
-  'Jaw_Open':    ['jawOpen','Mouth_Open','JawOpen','jaw_open'],
-  'Mouth_Close': ['mouthClose','MouthClose','mouth_close'],
-  'Jaw_Forward': ['jawForward','jawThrust','JawForward'],
-  'Jaw_L':       ['jawLeft','jawSideLeft','JawLeft'],
-  'Jaw_R':       ['jawRight','jawSideRight','JawRight'],
-
-  'Tongue_Out':  ['tongueOut','tongueShow'],
-  'Tongue_Bulge_L': ['tongueBulgeLeft'],
-  'Tongue_Bulge_R': ['tongueBulgeRight'],
-
-  'Head_Turn_L':   ['headTurnLeft'],
-  'Head_Turn_R':   ['headTurnRight'],
-  'Head_Turn_Up':  ['headUp'],
-  'Head_Turn_Down':['headDown'],
-};
-
-// Back-compat for older code paths
-export const ALIASES: Record<string, string[]> = MORPH_VARIANTS;
-
 export const VISEME_KEYS: string[] = [
   'EE','Er','IH','Ah','Oh','W_OO','S_Z','Ch_J','F_V','TH','T_L_D_N','B_M_P','K_G_H_NG','AE','R'
 ];
-
-// Useful direct-control morph key sets
-export const EYELID_KEYS: string[] = [
-  'Eye_Blink_L','Eye_Blink_R','Eye_Squint_L','Eye_Squint_R','Eye_Wide_L','Eye_Wide_R'
-];
-
-export const EYE_LOOK_KEYS: string[] = [
-  'Eye_L_Look_L','Eye_L_Look_R','Eye_L_Look_Up','Eye_L_Look_Down',
-  'Eye_R_Look_L','Eye_R_Look_R','Eye_R_Look_Up','Eye_R_Look_Down'
-];
-
-/** Individual-eye combined axes */
-export const EYE_L_COMBINED_AXES = {
-  horizontal: { left: 65, right: 66 },
-  vertical:   { up: 67,  down: 68 },
-};
-export const EYE_R_COMBINED_AXES = {
-  horizontal: { left: 69, right: 70 },
-  vertical:   { up: 71,  down: 72 },
-};
 
 // Bone bindings for rigs that rotate eyeballs via armature rather than morphs.
 // Mapping-only: the engine resolves placeholder node names (EYE_L/EYE_R/etc.) to real nodes using candidates.
@@ -318,32 +226,6 @@ export const COMPOSITE_ROTATIONS: CompositeRotation[] = [
   }
 ];
 
-/**
- * Map AU ID to which composite rotation it belongs to, and which axis.
- * This allows quick lookup when setAU is called.
- */
-export const AU_TO_COMPOSITE_MAP = new Map<number, {
-  nodes: ('JAW' | 'HEAD' | 'EYE_L' | 'EYE_R' | 'TONGUE')[];
-  axis: 'pitch' | 'yaw' | 'roll';
-}>();
-
-// Build the reverse mapping
-COMPOSITE_ROTATIONS.forEach(comp => {
-  (['pitch', 'yaw', 'roll'] as const).forEach(axisName => {
-    const axis = comp[axisName];
-    if (axis) {
-      axis.aus.forEach(auId => {
-        const existing = AU_TO_COMPOSITE_MAP.get(auId);
-        if (existing) {
-          existing.nodes.push(comp.node);
-        } else {
-          AU_TO_COMPOSITE_MAP.set(auId, { nodes: [comp.node], axis: axisName });
-        }
-      });
-    }
-  });
-});
-
 // Candidate node names to resolve placeholders per-side on common CC/GLB exports.
 // Canonical CC4 bone + mesh names. Since we only target CC4 rigs now, the mapping is explicit.
 export const CC4_BONE_NODES = {
@@ -435,241 +317,201 @@ export const AU_INFO: Record<string, AUInfo> = {
   '56': { id:'56', name:'Head Tilt Right',   faceArea:'Upper', facePart:'Head', faceSection:'Head' },
 };
 
-// --- Engine metadata helpers ---
-
-/**
- * Defines which AU ids are bone-driven rather than morph-only.
- * This informs the engine to apply rotations/translations via skeleton bones.
- */
-export const BONE_DRIVEN_AUS = new Set([
-  31, 32, 33, 54, 55, 56, // head turn/tilt (left, right, up, down, tilt left, tilt right)
-  61, 62, 63, 64, // eyes (left, right, up, down)
-  25, 26, 27, 29, 30, 35, // jaw (lips part, jaw drop, mouth stretch, jaw forward, jaw left, jaw right)
-  19, 37, 38, 39, 40 // tongue (show, up, down, left, right)
-]);
-
-/**
- * Axis configuration for CC-based rigs.
- * Adjusts which local rotation axis drives yaw/pitch of the eyes.
- */
-export const EYE_AXIS = {
-  yaw: 'rz' as 'ry' | 'rz',   // use 'rz' for CC rigs where eyeballs rotate around Z
-  pitch: 'rx' as 'rx' | 'ry' | 'rz'
-};
-
-/**
- * Combined AUs for continuous bidirectional eye control.
- */
-export const EYE_COMBINED_AXES = {
-  horizontal: { left: 61, right: 62 },
-  vertical: { up: 63, down: 64 },
-};
-
-/**
- * Combined AUs for continuous bidirectional head control.
- */
-export const HEAD_COMBINED_AXES = {
-  horizontal: { left: 31, right: 32 },
-  vertical: { up: 33, down: 54 },
-};
-
-/**
- * Head roll (tilt) — single continuum mapping (Left↔Right tilt).
- */
-export const HEAD_TILT_AXIS = { left: 55, right: 56 };
-
-/**
- * Jaw horizontal — single continuum mapping (Left↔Right).
- */
-export const JAW_HORIZONTAL_AXIS = { left: 30, right: 35 };
-
-/**
- * Tongue combined axes for continuous bidirectional control.
- */
-export const TONGUE_COMBINED_AXES = {
-  horizontal: { left: 39, right: 40 },
-  vertical: { down: 38, up: 37 },
-};
-
-/**
- * All continuum pairs for bidirectional sliders.
- * Each pair specifies the negative (left/down) and positive (right/up) AU IDs.
- */
-export const CONTINUUM_PAIRS: Array<{ negative: number; positive: number; showBlend: boolean }> = [
-  // Eyes
-  { negative: 61, positive: 62, showBlend: true },  // Eyes Left ↔ Right
-  { negative: 64, positive: 63, showBlend: true },  // Eyes Down ↔ Up
-
-  // Head
-  { negative: 31, positive: 32, showBlend: true },  // Head Turn Left ↔ Right
-  { negative: 54, positive: 33, showBlend: true },  // Head Down ↔ Up
-  { negative: 55, positive: 56, showBlend: true },  // Head Tilt Left ↔ Right
-
-  // Jaw
-  { negative: 30, positive: 35, showBlend: true },  // Jaw Left ↔ Right
-
-  // Tongue
-  { negative: 38, positive: 37, showBlend: true },  // Tongue Down ↔ Up
-  { negative: 39, positive: 40, showBlend: true },  // Tongue Left ↔ Right
-];
-
-/**
- * Set of all AU IDs that are part of continuum pairs.
- * Used to filter them out from individual AU sliders.
- */
-export const CONTINUUM_AU_IDS = new Set(
-  CONTINUUM_PAIRS.flatMap(pair => [pair.negative, pair.positive])
-);
-
-/**
- * Which AUs have both morphs and bones (so they can blend between them).
- * Now includes all head turn/tilt AUs so they appear with ratio sliders in the UI.
- */
-export const MIXED_AUS = new Set([31, 32, 33, 54, 55, 56, 61, 62, 63, 64, 26]);
-
-/**
- * Automatically computed mixed AUs — any AU that has both morphs and bone bindings.
- */
-export const AUTO_MIXED_AUS = new Set(
-  Object.keys(AU_TO_MORPHS)
-    .map(Number)
-    .filter((id) => AU_TO_MORPHS[id]?.length && BONE_AU_TO_BINDINGS[id]?.length)
-);
-
-/**
- * Default mix weights (0 = morph only, 1 = bone only)
- */
+/** Default mix weights (0 = morph only, 1 = bone only) */
 export const AU_MIX_DEFAULTS: Record<number, number> = {
-  31: 0.7,
-  32: 0.7,
-  33: 0.7,
-  54: 0.7,
-  61: 0.5,
-  62: 0.5,
-  63: 0.5,
-  64: 0.5,
-  26: 0.8,
+  31: 0.7, 32: 0.7, 33: 0.7, 54: 0.7, 55: 0.7, 56: 0.7,  // head
+  61: 0.5, 62: 0.5, 63: 0.5, 64: 0.5,  // eyes
+  26: 0.8,  // jaw
+};
+
+// ============================================================================
+// CC4 MESH CLASSIFICATION
+// Exact mesh names from CHARACTER_GEOMETRY_REFERENCE.md
+// ============================================================================
+
+export type MeshCategory = 'body' | 'eye' | 'eyeOcclusion' | 'tearLine' | 'teeth' | 'tongue' | 'hair' | 'eyebrow' | 'cornea' | 'eyelash';
+
+/** Exact mesh name -> category mapping from the character GLB */
+export const CC4_MESHES: Record<string, { category: MeshCategory; morphCount: number }> = {
+  // Body (6 meshes, 80 morphs each)
+  'CC_Base_Body_1': { category: 'body', morphCount: 80 },
+  'CC_Base_Body_2': { category: 'body', morphCount: 80 },
+  'CC_Base_Body_3': { category: 'body', morphCount: 80 },
+  'CC_Base_Body_4': { category: 'body', morphCount: 80 },
+  'CC_Base_Body_5': { category: 'body', morphCount: 80 },
+  'CC_Base_Body_6': { category: 'body', morphCount: 80 },
+  // Eyes (bone-driven, no morphs)
+  'CC_Base_Eye': { category: 'eye', morphCount: 0 },
+  'CC_Base_Eye_1': { category: 'eye', morphCount: 0 },
+  // Eye occlusion (94 morphs each)
+  'CC_Base_EyeOcclusion_1': { category: 'eyeOcclusion', morphCount: 94 },
+  'CC_Base_EyeOcclusion_2': { category: 'eyeOcclusion', morphCount: 94 },
+  // Tear lines (90 morphs each)
+  'CC_Base_TearLine_1': { category: 'tearLine', morphCount: 90 },
+  'CC_Base_TearLine_2': { category: 'tearLine', morphCount: 90 },
+  // Cornea (no morphs)
+  'CC_Base_Cornea': { category: 'cornea', morphCount: 0 },
+  'CC_Base_Cornea_1': { category: 'cornea', morphCount: 0 },
+  // Teeth (no morphs, follow jaw bone)
+  'CC_Base_Teeth_1': { category: 'teeth', morphCount: 0 },
+  'CC_Base_Teeth_2': { category: 'teeth', morphCount: 0 },
+  // Tongue (23 morphs)
+  'CC_Base_Tongue': { category: 'tongue', morphCount: 23 },
+  // Eyebrows (91 morphs each)
+  'Male_Bushy_1': { category: 'eyebrow', morphCount: 91 },
+  'Male_Bushy_2': { category: 'eyebrow', morphCount: 91 },
+  // Hair (14 styling morphs each)
+  'Side_part_wavy_1': { category: 'hair', morphCount: 14 },
+  'Side_part_wavy_2': { category: 'hair', morphCount: 14 },
 };
 
 /**
- * Hair and Eyebrow Object Detection Patterns
- *
- * Patterns used to automatically detect and classify hair/eyebrow objects in loaded 3D models.
- * All pattern matching is case-insensitive.
+ * Classify a CC4 mesh name as hair, eyebrow, or other.
+ * Used by EngineThree to set renderOrder for hair vs eyebrows.
  */
+export function classifyHairObject(name: string): 'hair' | 'eyebrow' | 'other' {
+  const entry = CC4_MESHES[name];
+  if (!entry) return 'other';
+  if (entry.category === 'hair') return 'hair';
+  if (entry.category === 'eyebrow') return 'eyebrow';
+  return 'other';
+}
 
-/**
- * Patterns that identify eyebrow objects
- */
-export const EYEBROW_PATTERNS = [
-  'eyebrow',
-  'brow',
-  'male_bushy',
-] as const;
+// ============================================================================
+// CC4 MORPH TARGETS
+// Complete list of morph targets from jonathan.glb, organized by category.
+// Face morphs only need to be applied to CC_Base_Body_1 (the face mesh).
+// ============================================================================
 
-/**
- * Exact name matches for eyebrow objects
- */
-export const EYEBROW_EXACT_MATCHES = [
-  'male_bushy',
-] as const;
+export type MorphCategory = 'face' | 'viseme' | 'eyeOcclusion' | 'tearLine' | 'tongue' | 'hair';
 
-/**
- * Patterns that identify hair objects (excluding eyebrows)
- */
-export const HAIR_PATTERNS = [
-  'hair',
-  'bushy',      // Only if not already classified as eyebrow
-  'side_part',
-  'sidepart',
-] as const;
+/** All morph targets organized by which mesh they apply to */
+export const CC4_MORPHS = {
+  // Face mesh (CC_Base_Body_1) - 80 morphs
+  face: [
+    // Brows
+    'Brow_Drop_L', 'Brow_Drop_R',
+    'Brow_Raise_Inner_L', 'Brow_Raise_Inner_R',
+    'Brow_Raise_Outer_L', 'Brow_Raise_Outer_R',
+    // Eyes
+    'Eye_Blink_L', 'Eye_Blink_R',
+    'Eye_L_Look_Down', 'Eye_L_Look_L', 'Eye_L_Look_R', 'Eye_L_Look_Up',
+    'Eye_R_Look_Down', 'Eye_R_Look_L', 'Eye_R_Look_R', 'Eye_R_Look_Up',
+    'Eye_Squint_L', 'Eye_Squint_R',
+    'Eye_Wide_L', 'Eye_Wide_R',
+    // Cheeks
+    'Cheek_Puff_L', 'Cheek_Puff_R',
+    'Cheek_Raise_L', 'Cheek_Raise_R',
+    // Nose
+    'Nose_Sneer_L', 'Nose_Sneer_R',
+    // Jaw
+    'Jaw_Forward', 'Jaw_L', 'Jaw_Open', 'Jaw_R',
+    // Mouth
+    'Mouth_Close',
+    'Mouth_Dimple_L', 'Mouth_Dimple_R',
+    'Mouth_Down_Lower_L', 'Mouth_Down_Lower_R',
+    'Mouth_Frown_L', 'Mouth_Frown_R',
+    'Mouth_Funnel',
+    'Mouth_L', 'Mouth_R',
+    'Mouth_Press_L', 'Mouth_Press_R',
+    'Mouth_Pucker',
+    'Mouth_Roll_In_Lower', 'Mouth_Roll_In_Upper',
+    'Mouth_Shrug_Lower', 'Mouth_Shrug_Upper',
+    'Mouth_Smile_L', 'Mouth_Smile_R',
+    'Mouth_Stretch_L', 'Mouth_Stretch_R',
+    'Mouth_Up_Upper_L', 'Mouth_Up_Upper_R',
+    // Head
+    'Head_Backward', 'Head_Forward',
+    'Head_L', 'Head_R',
+    'Head_Tilt_L', 'Head_Tilt_R',
+    'Head_Turn_Down', 'Head_Turn_L', 'Head_Turn_R', 'Head_Turn_Up',
+  ],
 
-/**
- * Exact name matches for hair objects
- */
-export const HAIR_EXACT_MATCHES = [
-  'side_part_wavy',
-] as const;
+  // Visemes (also on face mesh)
+  viseme: [
+    'AE', 'Ah', 'B_M_P', 'Ch_J', 'EE', 'Er', 'F_V', 'IH',
+    'K_G_H_NG', 'Oh', 'R', 'S_Z', 'TH', 'T_L_D_N', 'W_OO',
+  ],
 
-/**
- * Hair Object Type Definitions
- * Maps common hair object names to their type (hair or eyebrow)
- */
-export type HairObjectType = 'hair' | 'eyebrow';
+  // Eye Occlusion morphs (CC_Base_EyeOcclusion_1, CC_Base_EyeOcclusion_2)
+  eyeOcclusion: [
+    'EO Bulge L', 'EO Bulge R',
+    'EO Center Lower Depth L', 'EO Center Lower Depth R',
+    'EO Center Lower Height L', 'EO Center Lower Height R',
+    'EO Center Upper Depth L', 'EO Center Upper Depth R',
+    'EO Center Upper Height L', 'EO Center Upper Height R',
+    'EO Depth L', 'EO Depth R',
+    'EO Duct Depth L', 'EO Duct Depth R',
+    'EO Inner Depth L', 'EO Inner Depth R',
+    'EO Inner Height L', 'EO Inner Height R',
+    'EO Inner Lower Depth L', 'EO Inner Lower Depth R',
+    'EO Inner Lower Height L', 'EO Inner Lower Height R',
+    'EO Inner Upper Depth L', 'EO Inner Upper Depth R',
+    'EO Inner Upper Height L', 'EO Inner Upper Height R',
+    'EO Inner Width L', 'EO Inner Width R',
+    'EO Lower Depth L', 'EO Lower Depth R',
+    'EO Outer Depth L', 'EO Outer Depth R',
+    'EO Outer Height L', 'EO Outer Height R',
+    'EO Outer Lower Depth L', 'EO Outer Lower Depth R',
+    'EO Outer Lower Height L', 'EO Outer Lower Height R',
+    'EO Outer Upper Depth L', 'EO Outer Upper Depth R',
+    'EO Outer Upper Height L', 'EO Outer Upper Height R',
+    'EO Outer Width L', 'EO Outer Width R',
+    'EO Upper Depth L', 'EO Upper Depth R',
+  ],
 
-export const HAIR_OBJECT_REGISTRY: Record<string, HairObjectType> = {
-  // Common hair object names from Character Creator
-  'CC_Base_Hair': 'hair',
-  'Hair': 'hair',
-  'Ponytail': 'hair',
-  'Braid': 'hair',
-  'Bangs': 'hair',
-  'Sideburns': 'hair',
-  'Male_Bushy': 'eyebrow',
-  'Side_part_wavy': 'hair',
+  // Tear Line morphs (CC_Base_TearLine_1, CC_Base_TearLine_2)
+  tearLine: [
+    'TL Center Lower Depth L', 'TL Center Lower Depth R',
+    'TL Center Lower Height L', 'TL Center Lower Height R',
+    'TL Center Upper Depth L', 'TL Center Upper Depth R',
+    'TL Center Upper Height L', 'TL Center Upper Height R',
+    'TL Depth L', 'TL Depth R',
+    'TL Duct Depth L', 'TL Duct Depth R',
+    'TL Inner Depth L', 'TL Inner Depth R',
+    'TL Inner Height L', 'TL Inner Height R',
+    'TL Inner Lower Depth L', 'TL Inner Lower Depth R',
+    'TL Inner Lower Height L', 'TL Inner Lower Height R',
+    'TL Inner Upper Depth L', 'TL Inner Upper Depth R',
+    'TL Inner Upper Height L', 'TL Inner Upper Height R',
+    'TL Inner Width L', 'TL Inner Width R',
+    'TL Lower Depth L', 'TL Lower Depth R',
+    'TL Outer Depth L', 'TL Outer Depth R',
+    'TL Outer Height L', 'TL Outer Height R',
+    'TL Outer Lower Depth L', 'TL Outer Lower Depth R',
+    'TL Outer Lower Height L', 'TL Outer Lower Height R',
+    'TL Outer Upper Depth L', 'TL Outer Upper Depth R',
+    'TL Outer Upper Height L', 'TL Outer Upper Height R',
+    'TL Outer Width L', 'TL Outer Width R',
+    'TL Upper Depth L', 'TL Upper Depth R',
+  ],
 
-  // Eyebrow variations
-  'Eyebrow_L': 'eyebrow',
-  'Eyebrow_R': 'eyebrow',
-  'Brow_L': 'eyebrow',
-  'Brow_R': 'eyebrow',
-  'LeftEyebrow': 'eyebrow',
-  'RightEyebrow': 'eyebrow',
+  // Tongue morphs (CC_Base_Tongue)
+  tongue: [
+    'Tongue_Bulge_L', 'Tongue_Bulge_R',
+    'Tongue_Down', 'Tongue_L', 'Tongue_R', 'Tongue_Up',
+    'Tongue_Narrow', 'Tongue_Wide',
+    'Tongue_Out', 'Tongue_Roll',
+    'Tongue_Tip_Down', 'Tongue_Tip_Up',
+  ],
+
+  // Hair morphs (Side_part_wavy_1, Side_part_wavy_2)
+  hair: [
+    'Fluffy_Bottom_ALL', 'Fluffy_Right',
+    'Hairline_High_ALL', 'Hairline_High_M', 'Hairline_High_R',
+    'Hairline_Low_ALL', 'Hairline_Low_M', 'Hairline_Low_R',
+    'Hairline_Out_All',
+    'L_Hair_Front', 'L_Hair_Left', 'L_Hair_Right',
+    'Length_Long', 'Length_Short',
+  ],
 } as const;
 
-/**
- * Helper function to check if an AU has separate left/right morphs
- * @param auId - The AU ID to check
- * @returns true if the AU has both _L and _R morph variants
- */
-export function hasLeftRightMorphs(auId: number): boolean {
-  const morphs = AU_TO_MORPHS[auId] || [];
-  const hasLeft = morphs.some(k => /_L$|Left$/.test(k));
-  const hasRight = morphs.some(k => /_R$|Right$/.test(k));
-  return hasLeft && hasRight;
-}
-
-/**
- * Helper function to determine if an object is hair or eyebrow
- * Uses patterns and exact matches defined above
- */
-export function classifyHairObject(name: string): HairObjectType | null {
-  const nameLower = name.toLowerCase();
-
-  // Check exact registry first (case-insensitive)
-  for (const [key, type] of Object.entries(HAIR_OBJECT_REGISTRY)) {
-    if (key.toLowerCase() === nameLower) {
-      return type;
-    }
-  }
-
-  // Check eyebrow patterns
-  for (const pattern of EYEBROW_PATTERNS) {
-    if (nameLower.includes(pattern.toLowerCase())) {
-      return 'eyebrow';
-    }
-  }
-
-  // Check eyebrow exact matches
-  for (const exact of EYEBROW_EXACT_MATCHES) {
-    if (nameLower === exact.toLowerCase()) {
-      return 'eyebrow';
-    }
-  }
-
-  // Check hair patterns
-  for (const pattern of HAIR_PATTERNS) {
-    if (nameLower.includes(pattern.toLowerCase())) {
-      return 'hair';
-    }
-  }
-
-  // Check hair exact matches
-  for (const exact of HAIR_EXACT_MATCHES) {
-    if (nameLower === exact.toLowerCase()) {
-      return 'hair';
-    }
-  }
-
-  return null;
-}
+/** Which mesh each morph category applies to */
+export const MORPH_TO_MESH: Record<MorphCategory, string[]> = {
+  face: ['CC_Base_Body_1'],  // Face morphs only need the face mesh
+  viseme: ['CC_Base_Body_1'],
+  eyeOcclusion: ['CC_Base_EyeOcclusion_1', 'CC_Base_EyeOcclusion_2'],
+  tearLine: ['CC_Base_TearLine_1', 'CC_Base_TearLine_2'],
+  tongue: ['CC_Base_Tongue'],
+  hair: ['Side_part_wavy_1', 'Side_part_wavy_2'],
+};

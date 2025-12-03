@@ -2,16 +2,17 @@ import * as THREE from 'three';
 import { SpringValue } from '@react-spring/core';
 import {
   AU_TO_MORPHS,
-  MORPH_VARIANTS,
   BONE_AU_TO_BINDINGS,
-  BONE_DRIVEN_AUS,
-  EYE_AXIS,
-  MIXED_AUS,
-  AU_TO_COMPOSITE_MAP,
   COMPOSITE_ROTATIONS,
   CC4_BONE_NODES,
   CC4_EYE_MESH_NODES
 } from './arkit/shapeDict';
+import {
+  BONE_DRIVEN_AUS,
+  EYE_AXIS,
+  MIXED_AUS,
+  AU_TO_COMPOSITE_MAP
+} from './EngineThree';
 
 const X_AXIS = new THREE.Vector3(1, 0, 0);
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -161,15 +162,7 @@ export class EngineFour {
       const dict: any = (m as any).morphTargetDictionary;
       const infl: any = (m as any).morphTargetInfluences;
       if (!dict || !infl) continue;
-      let idx = dict[key];
-      if (idx === undefined && MORPH_VARIANTS[key]) {
-        for (const alt of MORPH_VARIANTS[key]) {
-          if (dict[alt] !== undefined) {
-            idx = dict[alt];
-            break;
-          }
-        }
-      }
+      const idx = dict[key];
       if (idx !== undefined) return infl[idx] ?? 0;
     }
     return 0;
@@ -458,15 +451,7 @@ export class EngineFour {
       const infl: any = (m as any).morphTargetInfluences;
       if (!dict || !infl) continue;
 
-      let idx = dict[name];
-      if (idx === undefined && MORPH_VARIANTS[name]) {
-        for (const alt of MORPH_VARIANTS[name]) {
-          if (dict[alt] !== undefined) {
-            idx = dict[alt];
-            break;
-          }
-        }
-      }
+      const idx = dict[name];
       if (idx !== undefined) {
         infl[idx] = Math.max(0, Math.min(1, value));
       }

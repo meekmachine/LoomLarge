@@ -18,9 +18,9 @@ import {
   FormControl,
   FormLabel,
 } from '@chakra-ui/react';
-import { AU_TO_MORPHS, VISEME_KEYS, AU_INFO, MIXED_AUS } from '../../engine/arkit/shapeDict';
+import { AU_TO_MORPHS, VISEME_KEYS, AU_INFO } from '../../engine/arkit/shapeDict';
 import { useEngineState } from '../../context/engineContext';
-import { EngineThree } from '../../engine/EngineThree';
+import { EngineThree, MIXED_AUS } from '../../engine/EngineThree';
 import { CurveEditor } from '../CurveEditor';
 
 export default function AUQuickPanel() {

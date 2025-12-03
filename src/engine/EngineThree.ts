@@ -1,18 +1,84 @@
 import * as THREE from 'three';
 import {
   AU_TO_MORPHS,
-  MORPH_VARIANTS,
   BONE_AU_TO_BINDINGS,
-  BONE_DRIVEN_AUS,
-  EYE_AXIS,
-  MIXED_AUS,
-  AU_TO_COMPOSITE_MAP,
   COMPOSITE_ROTATIONS,
   AU_MIX_DEFAULTS,
-  classifyHairObject,
   CC4_BONE_NODES,
-  CC4_EYE_MESH_NODES
+  CC4_EYE_MESH_NODES,
+  CC4_MESHES,
+  type CompositeRotation,
 } from './arkit/shapeDict';
+
+// ============================================================================
+// DERIVED CONSTANTS - computed from shapeDict core data
+// ============================================================================
+
+/** All AU IDs that have bone bindings */
+export const BONE_DRIVEN_AUS = new Set(Object.keys(BONE_AU_TO_BINDINGS).map(Number));
+
+/** Eye axis override for CC rigs (eyes rotate around Z for yaw) */
+export const EYE_AXIS = {
+  yaw: 'rz' as 'ry' | 'rz',
+  pitch: 'rx' as 'rx' | 'ry' | 'rz'
+};
+
+/** AUs that have both morphs and bones - can blend between them */
+export const MIXED_AUS = new Set(
+  Object.keys(AU_TO_MORPHS)
+    .map(Number)
+    .filter(id => AU_TO_MORPHS[id]?.length && BONE_AU_TO_BINDINGS[id]?.length)
+);
+
+/** Map AU ID to which composite rotation it belongs to, and which axis */
+export const AU_TO_COMPOSITE_MAP = new Map<number, {
+  nodes: CompositeRotation['node'][];
+  axis: 'pitch' | 'yaw' | 'roll';
+}>();
+
+// Build the reverse mapping from COMPOSITE_ROTATIONS
+COMPOSITE_ROTATIONS.forEach(comp => {
+  (['pitch', 'yaw', 'roll'] as const).forEach(axisName => {
+    const axis = comp[axisName];
+    if (axis) {
+      axis.aus.forEach(auId => {
+        const existing = AU_TO_COMPOSITE_MAP.get(auId);
+        if (existing) {
+          existing.nodes.push(comp.node);
+        } else {
+          AU_TO_COMPOSITE_MAP.set(auId, { nodes: [comp.node], axis: axisName });
+        }
+      });
+    }
+  });
+});
+
+/** Continuum pairs derived from COMPOSITE_ROTATIONS for UI sliders */
+export const CONTINUUM_PAIRS: Array<{ negative: number; positive: number; showBlend: boolean }> = (() => {
+  const seen = new Set<string>();
+  const pairs: Array<{ negative: number; positive: number; showBlend: boolean }> = [];
+  for (const comp of COMPOSITE_ROTATIONS) {
+    for (const axisName of ['pitch', 'yaw', 'roll'] as const) {
+      const axis = comp[axisName];
+      if (axis?.negative !== undefined && axis?.positive !== undefined) {
+        const key = `${axis.negative}-${axis.positive}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          pairs.push({ negative: axis.negative, positive: axis.positive, showBlend: true });
+        }
+      }
+    }
+  }
+  return pairs;
+})();
+
+/** Check if an AU has separate left/right morphs */
+export function hasLeftRightMorphs(auId: number): boolean {
+  const morphs = AU_TO_MORPHS[auId] || [];
+  const hasLeft = morphs.some(k => /_L$|Left$/.test(k));
+  const hasRight = morphs.some(k => /_R$|Right$/.test(k));
+  return hasLeft && hasRight;
+}
 
 const X_AXIS = new THREE.Vector3(1,0,0);
 const Y_AXIS = new THREE.Vector3(0,1,0);
@@ -87,12 +153,7 @@ export class EngineThree {
       const dict: any = (m as any).morphTargetDictionary;
       const infl: any = (m as any).morphTargetInfluences;
       if (!dict || !infl) continue;
-      let idx = dict[key];
-      if (idx === undefined && MORPH_VARIANTS[key]) {
-        for (const alt of MORPH_VARIANTS[key]) {
-          if (dict[alt] !== undefined) { idx = dict[alt]; break; }
-        }
-      }
+      const idx = dict[key];
       if (idx !== undefined) return infl[idx] ?? 0;
     }
     return 0;
@@ -129,9 +190,14 @@ export class EngineThree {
     const dtSeconds = Math.max(0, deltaSeconds || 0);
     if (dtSeconds <= 0 || this.isPaused) return;
     if (this.bakedMixer && !this.bakedPaused) this.bakedMixer.update(dtSeconds);
+    if (this.morphMixer) this.morphMixer.update(dtSeconds);  // Update proper morph animations
     this.mixer.update(dtSeconds);
     if (!this.rigReady) return;
     this.applyDriverValues();
+    // Update mouse tracking (smooth interpolation)
+    if (this.mouseTrackingEnabled) {
+      this.updateMouseTrackingSmooth(0.08);
+    }
   }
 
   /** Clear all running transitions (used when playback rate changes to prevent timing conflicts). */
@@ -266,6 +332,48 @@ export class EngineThree {
   }
   private meshes: THREE.Mesh[] = [];
   private model: THREE.Object3D | null = null;
+
+  /** Get all mesh info for UI display (traverses full model, not just morph meshes) */
+  getMeshList = (): Array<{ name: string; visible: boolean; category: string; morphCount: number }> => {
+    if (!this.model) return [];
+    const result: Array<{ name: string; visible: boolean; category: string; morphCount: number }> = [];
+    this.model.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        const info = CC4_MESHES[mesh.name];
+        result.push({
+          name: mesh.name,
+          visible: mesh.visible,
+          category: info?.category || 'other',
+          morphCount: info?.morphCount ?? (mesh.morphTargetInfluences?.length || 0),
+        });
+      }
+    });
+    return result;
+  };
+
+  /** Set mesh visibility by name (searches full model) */
+  setMeshVisible = (meshName: string, visible: boolean) => {
+    if (!this.model) return;
+    this.model.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh && obj.name === meshName) {
+        obj.visible = visible;
+      }
+    });
+  };
+
+  /** Set visibility for all meshes of a category */
+  setCategoryVisible = (category: string, visible: boolean) => {
+    if (!this.model) return;
+    this.model.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const info = CC4_MESHES[obj.name];
+        if (info?.category === category) {
+          obj.visible = visible;
+        }
+      }
+    });
+  };
   private bones: ResolvedBones = {};
 
   // --- Mix weight system ---
@@ -341,9 +449,7 @@ export class EngineThree {
     ['headYaw','headPitch','headRoll','eyeYaw','eyePitch'].forEach((key) => this.syncDriverValue(key, 0));
   };
 
-  hasBoneBinding = (id: number) => {
-    return !!BONE_AU_TO_BINDINGS[id];
-  };
+  hasBoneBinding = (id: number) => BONE_DRIVEN_AUS.has(id);
 
   onReady = ({ meshes, model, animations }: { meshes: THREE.Mesh[]; model?: THREE.Object3D; animations?: THREE.AnimationClip[] }) => {
     this.meshes = meshes;
@@ -435,12 +541,7 @@ export class EngineThree {
       const dict: any = (m as any).morphTargetDictionary;
       const infl: any = (m as any).morphTargetInfluences;
       if (!dict || !infl) continue;
-      let idx = dict[key];
-      if (idx === undefined && MORPH_VARIANTS[key]) {
-        for (const alt of MORPH_VARIANTS[key]) {
-          if (dict[alt] !== undefined) { idx = dict[alt]; break; }
-        }
-      }
+      const idx = dict[key];
       if (idx !== undefined) infl[idx] = val;
     }
     this.syncDriverValue(this.getMorphDriverKey(key), val);
@@ -465,12 +566,7 @@ export class EngineThree {
       const dict: any = (m as any).morphTargetDictionary;
       const infl: any = (m as any).morphTargetInfluences;
       if (!dict || !infl) continue;
-      let idx = dict[key];
-      if (idx === undefined && MORPH_VARIANTS[key]) {
-        for (const alt of MORPH_VARIANTS[key]) {
-          if (dict[alt] !== undefined) { idx = dict[alt]; break; }
-        }
-      }
+      const idx = dict[key];
       if (idx !== undefined) infl[idx] = val;
     }
 
@@ -489,20 +585,10 @@ export class EngineThree {
       const infl: any = (m as any).morphTargetInfluences;
       if (!dict || !infl) continue;
       for (const k of keys) {
-        let idx = dict[k];
-        let foundKey = k;
-        if (idx === undefined && MORPH_VARIANTS[k]) {
-          for (const alt of MORPH_VARIANTS[k]) {
-            if (dict[alt] !== undefined) {
-              idx = dict[alt];
-              foundKey = alt;
-              break;
-            }
-          }
-        }
+        const idx = dict[k];
         if (idx !== undefined) {
           infl[idx] = val;
-          if (!foundMorphs.includes(foundKey)) foundMorphs.push(foundKey);
+          if (!foundMorphs.includes(k)) foundMorphs.push(k);
         } else {
           if (!notFoundMorphs.includes(k)) notFoundMorphs.push(k);
         }
@@ -667,59 +753,49 @@ export class EngineThree {
     this.setHeadTilt(v);
   };
 
-  /** Jaw — horizontal continuum: left(30) ⟷ right(35) */
-  setJawHorizontal = (v: number) => {
-    const x = Math.max(-1, Math.min(1, v ?? 0));
-    // Update yaw rotation state and apply composite
-    this.updateBoneRotation('JAW', 'yaw', x);
-    this.applyCompositeRotation('JAW');
-    // Also update AU values for UI sync
-    if (x >= 0) {
-      this.auValues[35] = x;
-      this.auValues[30] = 0;
+  /**
+   * Generic bone-axis setter for JAW/TONGUE style continuums.
+   * Uses COMPOSITE_ROTATIONS to find the AU pair for the given node+axis.
+   */
+  private setBoneAxis = (
+    node: 'JAW' | 'TONGUE',
+    axis: 'pitch' | 'yaw',
+    value: number
+  ) => {
+    const v = Math.max(-1, Math.min(1, value ?? 0));
+
+    // Find the AU pair from COMPOSITE_ROTATIONS
+    const comp = COMPOSITE_ROTATIONS.find(c => c.node === node);
+    const axisConfig = comp?.[axis];
+    if (!axisConfig?.negative || !axisConfig?.positive) return;
+
+    const { negative: negAU, positive: posAU } = axisConfig;
+
+    // Update bone rotation state and apply composite
+    this.updateBoneRotation(node, axis, v);
+    this.applyCompositeRotation(node);
+
+    // Update AU values for UI sync
+    if (v >= 0) {
+      this.auValues[posAU] = v;
+      this.auValues[negAU] = 0;
     } else {
-      this.auValues[30] = -x;
-      this.auValues[35] = 0;
+      this.auValues[negAU] = -v;
+      this.auValues[posAU] = 0;
     }
+
     // Apply morphs
-    this.applyBothSides(x >= 0 ? 35 : 30, Math.abs(x));
+    this.applyBothSides(v >= 0 ? posAU : negAU, Math.abs(v));
   };
+
+  /** Jaw — horizontal continuum: left(30) ⟷ right(35) */
+  setJawHorizontal = (v: number) => this.setBoneAxis('JAW', 'yaw', v);
 
   /** Tongue — horizontal continuum: left(39) ⟷ right(40) */
-  setTongueHorizontal = (v: number) => {
-    const x = Math.max(-1, Math.min(1, v ?? 0));
-    // Update yaw rotation state and apply composite
-    this.updateBoneRotation('TONGUE', 'yaw', x);
-    this.applyCompositeRotation('TONGUE');
-    // Also update AU values for UI sync
-    if (x >= 0) {
-      this.auValues[40] = x;
-      this.auValues[39] = 0;
-    } else {
-      this.auValues[39] = -x;
-      this.auValues[40] = 0;
-    }
-    // Apply morphs
-    this.applyBothSides(x >= 0 ? 40 : 39, Math.abs(x));
-  };
+  setTongueHorizontal = (v: number) => this.setBoneAxis('TONGUE', 'yaw', v);
 
   /** Tongue — vertical continuum: down(38) ⟷ up(37) — positive = up */
-  setTongueVertical = (v: number) => {
-    const y = Math.max(-1, Math.min(1, v ?? 0));
-    // Update pitch rotation state and apply composite
-    this.updateBoneRotation('TONGUE', 'pitch', y);
-    this.applyCompositeRotation('TONGUE');
-    // Also update AU values for UI sync
-    if (y >= 0) {
-      this.auValues[37] = y;
-      this.auValues[38] = 0;
-    } else {
-      this.auValues[38] = -y;
-      this.auValues[37] = 0;
-    }
-    // Apply morphs
-    this.applyBothSides(y >= 0 ? 37 : 38, Math.abs(y));
-  };
+  setTongueVertical = (v: number) => this.setBoneAxis('TONGUE', 'pitch', v);
 
   /**
    * Transition methods for continuum axes - smooth animated versions
@@ -1444,26 +1520,22 @@ export class EngineThree {
 
 
   /**
-   * Register hair objects and return engine-agnostic metadata
-   * This method handles all Three.js-specific operations for hair registration
+   * Register hair objects and return engine-agnostic metadata.
+   * Classification is handled by shapeDict (single source of truth).
    */
   registerHairObjects(objects: THREE.Object3D[]): Array<{
     name: string;
     isEyebrow: boolean;
     isMesh: boolean;
   }> {
-    const metadata = objects.map((obj) => {
+    return objects.map((obj) => {
       const isMesh = (obj as THREE.Mesh).isMesh || false;
+      const info = CC4_MESHES[obj.name];
+      const isEyebrow = info?.category === 'eyebrow';
 
-      // Classify using shapeDict
-      const classification = classifyHairObject(obj.name);
-      const isEyebrow = classification === 'eyebrow';
-
-      // Set render order immediately during registration
-      // Eyebrows: renderOrder = 0 (renders first/underneath)
-      // Hair: renderOrder = 1 (renders after/on top)
       if (isMesh) {
         const mesh = obj as THREE.Mesh;
+        // Eyebrows render first (under), hair renders later (on top)
         mesh.renderOrder = isEyebrow ? 0 : 1;
       }
 
@@ -1473,8 +1545,6 @@ export class EngineThree {
         isMesh,
       };
     });
-
-    return metadata;
   }
 
   /**
@@ -1895,6 +1965,534 @@ export class EngineThree {
     const suffix = side === 'L' ? /(^|_)L$/ : /(^|_)R$/;
     return keys.filter(k => suffix.test(k));
   }
+
+  // ========================================
+  // Proper AnimationMixer-based Morph Animations
+  // Works directly on real model geometry, not dummy objects
+  // ========================================
+
+  private morphMixer: THREE.AnimationMixer | null = null;
+  private morphActions = new Map<string, THREE.AnimationAction>();
+
+  /**
+   * Initialize the morph animation mixer on the actual model.
+   * Call this after onReady when model is loaded.
+   */
+  initMorphMixer = () => {
+    if (!this.model) {
+      console.warn('[EngineThree] Cannot init morph mixer - no model loaded');
+      return false;
+    }
+    this.morphMixer = new THREE.AnimationMixer(this.model);
+    this.morphActions.clear();
+    console.log('[EngineThree] ✅ Morph mixer initialized on model:', this.model.name);
+    return true;
+  };
+
+  /**
+   * Create a morph target animation clip.
+   * @param name - Clip name
+   * @param morphKey - The morph target key (e.g., 'Mouth_Smile_L')
+   * @param keyframes - Array of {time, value} keyframes
+   * @param meshName - Optional: target specific mesh, otherwise animates all meshes with this morph
+   */
+  createMorphClip = (
+    name: string,
+    morphKey: string,
+    keyframes: Array<{ time: number; value: number }>,
+    meshName?: string
+  ): THREE.AnimationClip | null => {
+    if (!this.meshes.length) {
+      console.warn('[EngineThree] No meshes available for morph clip');
+      return null;
+    }
+
+    const times = keyframes.map(k => k.time);
+    const values = keyframes.map(k => k.value);
+
+    const tracks: THREE.KeyframeTrack[] = [];
+
+    // Find meshes that have this morph target
+    for (const mesh of this.meshes) {
+      if (meshName && mesh.name !== meshName) continue;
+
+      const dict = (mesh as any).morphTargetDictionary;
+      if (!dict) continue;
+
+      const morphIndex = dict[morphKey];
+      if (morphIndex !== undefined) {
+        // Three.js morph target track path format: "meshName.morphTargetInfluences[index]"
+        const trackName = `${mesh.name}.morphTargetInfluences[${morphIndex}]`;
+        const track = new THREE.NumberKeyframeTrack(trackName, times, values);
+        tracks.push(track);
+      }
+    }
+
+    if (tracks.length === 0) {
+      console.warn(`[EngineThree] No meshes found with morph target: ${morphKey}`);
+      return null;
+    }
+
+    const clip = new THREE.AnimationClip(name, -1, tracks);
+    console.log(`[EngineThree] Created morph clip "${name}" with ${tracks.length} tracks for "${morphKey}"`);
+    return clip;
+  };
+
+  /**
+   * Create a multi-morph animation clip (multiple morphs animated together).
+   * @param name - Clip name
+   * @param morphAnimations - Array of {morphKey, keyframes} objects
+   */
+  createMultiMorphClip = (
+    name: string,
+    morphAnimations: Array<{
+      morphKey: string;
+      keyframes: Array<{ time: number; value: number }>;
+    }>
+  ): THREE.AnimationClip | null => {
+    const tracks: THREE.KeyframeTrack[] = [];
+
+    for (const { morphKey, keyframes } of morphAnimations) {
+      const times = keyframes.map(k => k.time);
+      const values = keyframes.map(k => k.value);
+
+      for (const mesh of this.meshes) {
+        const dict = (mesh as any).morphTargetDictionary;
+        if (!dict) continue;
+
+        const morphIndex = dict[morphKey];
+        if (morphIndex !== undefined) {
+          const trackName = `${mesh.name}.morphTargetInfluences[${morphIndex}]`;
+          const track = new THREE.NumberKeyframeTrack(trackName, times, values);
+          tracks.push(track);
+        }
+      }
+    }
+
+    if (tracks.length === 0) {
+      console.warn(`[EngineThree] No tracks created for multi-morph clip "${name}"`);
+      return null;
+    }
+
+    const clip = new THREE.AnimationClip(name, -1, tracks);
+    console.log(`[EngineThree] Created multi-morph clip "${name}" with ${tracks.length} tracks`);
+    return clip;
+  };
+
+  /**
+   * Play a morph animation clip.
+   * @param clip - The animation clip to play
+   * @param options - Playback options
+   */
+  playMorphClip = (
+    clip: THREE.AnimationClip,
+    options: {
+      loop?: boolean;
+      clampWhenFinished?: boolean;
+      timeScale?: number;
+      fadeIn?: number;
+    } = {}
+  ): THREE.AnimationAction | null => {
+    if (!this.morphMixer) {
+      console.warn('[EngineThree] Morph mixer not initialized. Call initMorphMixer() first.');
+      return null;
+    }
+
+    const { loop = false, clampWhenFinished = true, timeScale = 1, fadeIn = 0 } = options;
+
+    const action = this.morphMixer.clipAction(clip);
+    action.loop = loop ? THREE.LoopRepeat : THREE.LoopOnce;
+    action.clampWhenFinished = clampWhenFinished;
+    action.timeScale = timeScale;
+
+    if (fadeIn > 0) {
+      action.fadeIn(fadeIn);
+    }
+
+    action.reset();
+    action.play();
+
+    this.morphActions.set(clip.name, action);
+    console.log(`[EngineThree] Playing morph clip: ${clip.name}`);
+    return action;
+  };
+
+  /**
+   * Stop a playing morph animation.
+   */
+  stopMorphClip = (clipName: string, fadeOut: number = 0) => {
+    const action = this.morphActions.get(clipName);
+    if (!action) return;
+
+    if (fadeOut > 0) {
+      action.fadeOut(fadeOut);
+    } else {
+      action.stop();
+    }
+  };
+
+  /**
+   * Stop all morph animations.
+   */
+  stopAllMorphClips = () => {
+    this.morphActions.forEach(action => action.stop());
+    this.morphActions.clear();
+  };
+
+  /**
+   * Update the morph mixer. Call this in your animation loop.
+   * This is separate from the main update() which handles the driver-based system.
+   */
+  updateMorphMixer = (deltaSeconds: number) => {
+    this.morphMixer?.update(deltaSeconds);
+  };
+
+  // ========================================
+  // Test functions for App.tsx
+  // ========================================
+
+  /**
+   * Test: Create and play a simple smile animation.
+   * Call this from App.tsx to verify the system works.
+   */
+  testSmileAnimation = () => {
+    if (!this.initMorphMixer()) return;
+
+    const clip = this.createMultiMorphClip('test_smile', [
+      {
+        morphKey: 'Mouth_Smile_L',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.5, value: 1 },
+          { time: 1, value: 1 },
+          { time: 1.5, value: 0 },
+        ]
+      },
+      {
+        morphKey: 'Mouth_Smile_R',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.5, value: 1 },
+          { time: 1, value: 1 },
+          { time: 1.5, value: 0 },
+        ]
+      }
+    ]);
+
+    if (clip) {
+      this.playMorphClip(clip, { loop: true });
+      console.log('[EngineThree] 🎭 Test smile animation started! Call engine.stopAllMorphClips() to stop.');
+    }
+  };
+
+  /**
+   * Test: Create and play a blink animation.
+   */
+  testBlinkAnimation = () => {
+    if (!this.morphMixer && !this.initMorphMixer()) return;
+
+    const clip = this.createMultiMorphClip('test_blink', [
+      {
+        morphKey: 'Eye_Blink_L',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.1, value: 1 },
+          { time: 0.2, value: 0 },
+        ]
+      },
+      {
+        morphKey: 'Eye_Blink_R',
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 0.1, value: 1 },
+          { time: 0.2, value: 0 },
+        ]
+      }
+    ]);
+
+    if (clip) {
+      this.playMorphClip(clip, { loop: true, timeScale: 0.5 });
+      console.log('[EngineThree] 👁️ Test blink animation started!');
+    }
+  };
+
+  /**
+   * Test: Play an AU-based animation using COMPOSITE_ROTATIONS data.
+   * Demonstrates animating a continuum axis (e.g., head yaw).
+   */
+  testHeadAnimation = () => {
+    if (!this.morphMixer && !this.initMorphMixer()) return;
+
+    // Get head yaw morphs from AU_TO_MORPHS
+    const leftMorphs = AU_TO_MORPHS[31] || []; // Head Turn Left
+    const rightMorphs = AU_TO_MORPHS[32] || []; // Head Turn Right
+
+    const morphAnims: Array<{ morphKey: string; keyframes: Array<{ time: number; value: number }> }> = [];
+
+    // Animate left turn morphs
+    leftMorphs.forEach(morphKey => {
+      morphAnims.push({
+        morphKey,
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 1, value: 0.7 },
+          { time: 2, value: 0 },
+          { time: 3, value: 0 },
+        ]
+      });
+    });
+
+    // Animate right turn morphs
+    rightMorphs.forEach(morphKey => {
+      morphAnims.push({
+        morphKey,
+        keyframes: [
+          { time: 0, value: 0 },
+          { time: 1, value: 0 },
+          { time: 2, value: 0 },
+          { time: 3, value: 0.7 },
+          { time: 4, value: 0 },
+        ]
+      });
+    });
+
+    const clip = this.createMultiMorphClip('test_head_turn', morphAnims);
+    if (clip) {
+      this.playMorphClip(clip, { loop: true });
+      console.log('[EngineThree] 🙂 Test head turn animation started!');
+    }
+  };
+
+  /**
+   * Looping smile animation targeting only body meshes using CC4_MESHES.
+   * Creates tracks directly on the 6 body meshes.
+   */
+  testBodySmile = () => {
+    if (!this.morphMixer && !this.initMorphMixer()) return;
+
+    // Get body mesh names from CC4_MESHES
+    const bodyMeshNames = Object.entries(CC4_MESHES)
+      .filter(([_, info]) => info.category === 'body')
+      .map(([name]) => name);
+
+    console.log('[EngineThree] Body meshes:', bodyMeshNames);
+
+    const tracks: THREE.KeyframeTrack[] = [];
+    const times = [0, 0.5, 1.5, 2];
+    const values = [0, 1, 1, 0];
+
+    // For each body mesh, create tracks for smile morphs
+    for (const meshName of bodyMeshNames) {
+      const mesh = this.meshes.find(m => m.name === meshName);
+      if (!mesh) continue;
+
+      const dict = (mesh as any).morphTargetDictionary;
+      if (!dict) continue;
+
+      // Add Mouth_Smile_L track
+      const smileLIdx = dict['Mouth_Smile_L'];
+      if (smileLIdx !== undefined) {
+        tracks.push(new THREE.NumberKeyframeTrack(
+          `${meshName}.morphTargetInfluences[${smileLIdx}]`,
+          times,
+          values
+        ));
+      }
+
+      // Add Mouth_Smile_R track
+      const smileRIdx = dict['Mouth_Smile_R'];
+      if (smileRIdx !== undefined) {
+        tracks.push(new THREE.NumberKeyframeTrack(
+          `${meshName}.morphTargetInfluences[${smileRIdx}]`,
+          times,
+          values
+        ));
+      }
+    }
+
+    if (tracks.length === 0) {
+      console.warn('[EngineThree] No smile morphs found on body meshes');
+      return;
+    }
+
+    const clip = new THREE.AnimationClip('body_smile', -1, tracks);
+    console.log(`[EngineThree] Created body smile clip with ${tracks.length} tracks`);
+
+    this.playMorphClip(clip, { loop: true });
+    console.log('[EngineThree] 😊 Body smile animation started! Call engine.stopAllMorphClips() to stop.');
+  };
+
+  // ========================================
+  // MOUSE TRACKING / LOOK AT
+  // Character follows mouse cursor with head, neck, and eyes
+  // Based on: https://tympanus.net/codrops/2019/10/14/how-to-create-an-interactive-3d-character-with-three-js/
+  // ========================================
+
+  private mouseTrackingEnabled = false;
+  private mousePosition = { x: 0.5, y: 0.5 }; // Normalized 0-1 screen coords
+  private mouseMoveHandler: ((e: MouseEvent) => void) | null = null;
+
+  /**
+   * Enable mouse tracking - character will look at the mouse cursor.
+   * Head, neck, and eyes will smoothly follow the cursor.
+   */
+  enableMouseTracking = () => {
+    if (this.mouseTrackingEnabled) return;
+
+    this.mouseMoveHandler = (e: MouseEvent) => {
+      // Normalize to 0-1 range (0,0 = top-left, 1,1 = bottom-right)
+      this.mousePosition.x = e.clientX / window.innerWidth;
+      this.mousePosition.y = e.clientY / window.innerHeight;
+    };
+
+    window.addEventListener('mousemove', this.mouseMoveHandler);
+    this.mouseTrackingEnabled = true;
+    console.log('[EngineThree] 👀 Mouse tracking enabled');
+  };
+
+  /**
+   * Disable mouse tracking
+   */
+  disableMouseTracking = () => {
+    if (!this.mouseTrackingEnabled) return;
+
+    if (this.mouseMoveHandler) {
+      window.removeEventListener('mousemove', this.mouseMoveHandler);
+      this.mouseMoveHandler = null;
+    }
+
+    this.mouseTrackingEnabled = false;
+    console.log('[EngineThree] Mouse tracking disabled');
+  };
+
+  /**
+   * Get rotation degrees based on mouse position.
+   * Returns how many degrees to rotate on X and Y axes.
+   * @param degreeLimit - Maximum rotation in degrees
+   */
+  private getMouseDegrees(degreeLimit: number): { x: number; y: number } {
+    // Convert from 0-1 to -1 to 1 (center = 0)
+    const dx = (this.mousePosition.x - 0.5) * 2; // -1 (left) to 1 (right)
+    const dy = (this.mousePosition.y - 0.5) * 2; // -1 (top) to 1 (bottom)
+
+    // Scale by degree limit
+    return {
+      x: dx * degreeLimit,  // Yaw (left/right)
+      y: dy * degreeLimit   // Pitch (up/down)
+    };
+  }
+
+  /**
+   * Apply mouse tracking to joints.
+   * Call this in your animation loop or update function.
+   */
+  updateMouseTracking = () => {
+    if (!this.mouseTrackingEnabled) return;
+    if (!this.bones.HEAD || !this.bones.NECK) return;
+
+    const headBone = this.bones.HEAD.obj;
+    const neckBone = this.bones.NECK.obj;
+    const leftEye = this.bones.EYE_L?.obj;
+    const rightEye = this.bones.EYE_R?.obj;
+
+    // Get rotation amounts for different body parts
+    const headDegrees = this.getMouseDegrees(25);  // Head moves most
+    const neckDegrees = this.getMouseDegrees(15);  // Neck moves less
+    const eyeDegrees = this.getMouseDegrees(20);   // Eyes can move more than neck
+
+    // Apply to head (yaw and pitch)
+    if (headBone) {
+      const base = this.bones.HEAD.baseEuler;
+      headBone.rotation.y = base.y + THREE.MathUtils.degToRad(headDegrees.x);
+      headBone.rotation.x = base.x + THREE.MathUtils.degToRad(headDegrees.y);
+    }
+
+    // Apply to neck (less movement)
+    if (neckBone) {
+      const base = this.bones.NECK.baseEuler;
+      neckBone.rotation.y = base.y + THREE.MathUtils.degToRad(neckDegrees.x);
+      neckBone.rotation.x = base.x + THREE.MathUtils.degToRad(neckDegrees.y);
+    }
+
+    // Apply to eyes (they can move more freely)
+    if (leftEye) {
+      const base = this.bones.EYE_L!.baseEuler;
+      // Eyes rotate on Z for yaw in CC4 rigs
+      leftEye.rotation.z = base.z + THREE.MathUtils.degToRad(-eyeDegrees.x);
+      leftEye.rotation.x = base.x + THREE.MathUtils.degToRad(eyeDegrees.y);
+    }
+    if (rightEye) {
+      const base = this.bones.EYE_R!.baseEuler;
+      rightEye.rotation.z = base.z + THREE.MathUtils.degToRad(-eyeDegrees.x);
+      rightEye.rotation.x = base.x + THREE.MathUtils.degToRad(eyeDegrees.y);
+    }
+  };
+
+  /**
+   * Smoothly interpolated mouse tracking (call this in update loop).
+   * Uses lerp for smoother, more natural movement.
+   */
+  private targetRotations = {
+    head: { x: 0, y: 0 },
+    neck: { x: 0, y: 0 },
+    eyes: { x: 0, y: 0 }
+  };
+  private currentRotations = {
+    head: { x: 0, y: 0 },
+    neck: { x: 0, y: 0 },
+    eyes: { x: 0, y: 0 }
+  };
+
+  updateMouseTrackingSmooth = (lerpFactor = 0.1) => {
+    if (!this.mouseTrackingEnabled) return;
+    if (!this.bones.HEAD || !this.bones.NECK) return;
+
+    // Calculate target rotations
+    const headDegrees = this.getMouseDegrees(25);
+    const neckDegrees = this.getMouseDegrees(15);
+    const eyeDegrees = this.getMouseDegrees(30);
+
+    this.targetRotations.head = headDegrees;
+    this.targetRotations.neck = neckDegrees;
+    this.targetRotations.eyes = eyeDegrees;
+
+    // Lerp current toward target
+    this.currentRotations.head.x += (this.targetRotations.head.x - this.currentRotations.head.x) * lerpFactor;
+    this.currentRotations.head.y += (this.targetRotations.head.y - this.currentRotations.head.y) * lerpFactor;
+    this.currentRotations.neck.x += (this.targetRotations.neck.x - this.currentRotations.neck.x) * lerpFactor;
+    this.currentRotations.neck.y += (this.targetRotations.neck.y - this.currentRotations.neck.y) * lerpFactor;
+    this.currentRotations.eyes.x += (this.targetRotations.eyes.x - this.currentRotations.eyes.x) * lerpFactor * 1.5; // Eyes move faster
+    this.currentRotations.eyes.y += (this.targetRotations.eyes.y - this.currentRotations.eyes.y) * lerpFactor * 1.5;
+
+    // Apply rotations
+    const headBone = this.bones.HEAD.obj;
+    const neckBone = this.bones.NECK.obj;
+    const leftEye = this.bones.EYE_L?.obj;
+    const rightEye = this.bones.EYE_R?.obj;
+
+    if (headBone) {
+      const base = this.bones.HEAD.baseEuler;
+      headBone.rotation.y = base.y + THREE.MathUtils.degToRad(this.currentRotations.head.x);
+      headBone.rotation.x = base.x + THREE.MathUtils.degToRad(this.currentRotations.head.y);
+    }
+
+    if (neckBone) {
+      const base = this.bones.NECK.baseEuler;
+      neckBone.rotation.y = base.y + THREE.MathUtils.degToRad(this.currentRotations.neck.x);
+      neckBone.rotation.x = base.x + THREE.MathUtils.degToRad(this.currentRotations.neck.y);
+    }
+
+    if (leftEye) {
+      const base = this.bones.EYE_L!.baseEuler;
+      leftEye.rotation.z = base.z + THREE.MathUtils.degToRad(-this.currentRotations.eyes.x);
+      leftEye.rotation.x = base.x + THREE.MathUtils.degToRad(this.currentRotations.eyes.y);
+    }
+    if (rightEye) {
+      const base = this.bones.EYE_R!.baseEuler;
+      rightEye.rotation.z = base.z + THREE.MathUtils.degToRad(-this.currentRotations.eyes.x);
+      rightEye.rotation.x = base.x + THREE.MathUtils.degToRad(this.currentRotations.eyes.y);
+    }
+  };
 }
 
 function clamp01(x: number) { return x < 0 ? 0 : x > 1 ? 1 : x; }
