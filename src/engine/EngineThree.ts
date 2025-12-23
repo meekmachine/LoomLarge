@@ -18,6 +18,8 @@ import {
   CC4_MESHES,
   VISEME_KEYS,
 } from './arkit/shapeDict';
+import type { TransitionHandle } from './EngineThree.types';
+import { ThreeAnimation } from './ThreeAnimation';
 
 // Post-processing effect types
 export type PostEffect =
@@ -96,46 +98,11 @@ type NodeBase = {
 };
 
 type ResolvedBones = Partial<Record<BoneKeys, NodeBase>>;
-
-// Unified transition system - simple lerp-based
-type Transition = {
-  key: string;
-  from: number;
-  to: number;
-  duration: number;      // seconds
-  elapsed: number;       // seconds
-  apply: (value: number) => void;
-  easing: (t: number) => number;
-  resolve?: () => void;  // Called when transition completes
-  paused: boolean;       // Individual pause state
-};
-
-/**
- * TransitionHandle - returned from transitionAU/transitionMorph/transitionContinuum
- * Provides promise-based completion notification plus fine-grained control.
- *
- * The animation agency uses these handles to await keyframe transitions,
- * then schedule the next keyframe when the promise resolves.
- */
-export type TransitionHandle = {
-  /** Resolves when the transition completes (or is cancelled) */
-  promise: Promise<void>;
-  /** Pause this transition (holds at current value) */
-  pause: () => void;
-  /** Resume this transition after pause */
-  resume: () => void;
-  /** Cancel this transition immediately (resolves promise) */
-  cancel: () => void;
-};
-
-
-
-
 export class EngineThree {
   private auValues: Record<number, number> = {};
 
-  // Unified transition system - simple lerp-based
-  private transitions = new Map<string, Transition>();
+  // Unified transition system - delegated to ThreeAnimation
+  private animation = new ThreeAnimation();
 
   private rigReady = false;
   private missingBoneWarnings = new Set<string>();
@@ -165,7 +132,6 @@ export class EngineThree {
   // Nodes with pending rotation changes - applied once per frame in update()
   private pendingCompositeNodes = new Set<string>();
   private isPaused: boolean = false;
-  private easeInOutQuad = (t:number) => (t<0.5? 2*t*t : -1+(4-2*t)*t);
 
   // ============================================================================
   // INTERNAL RAF LOOP - EngineThree owns the frame loop
@@ -218,29 +184,6 @@ export class EngineThree {
   // Pre-resolves morph indices and bone references at transition creation time
   // ============================================================================
 
-  // Cache: morph key → array of { mesh, index } for direct access
-  private morphIndexCache = new Map<string, Array<{ mesh: THREE.Mesh; index: number }>>();
-
-  /** Build the morph index cache after meshes are loaded */
-  private buildMorphIndexCache() {
-    this.morphIndexCache.clear();
-
-    for (const mesh of this.meshes) {
-      const dict = (mesh as any).morphTargetDictionary as Record<string, number> | undefined;
-      if (!dict) continue;
-
-      for (const [key, index] of Object.entries(dict)) {
-        let entries = this.morphIndexCache.get(key);
-        if (!entries) {
-          entries = [];
-          this.morphIndexCache.set(key, entries);
-        }
-        entries.push({ mesh, index });
-      }
-    }
-
-    // console.log(`[EngineThree] Built morph index cache: ${this.morphIndexCache.size} unique morph keys`);
-  }
 
   // No constructor needed - all state is initialized inline
 
@@ -458,7 +401,7 @@ export class EngineThree {
     if (dtSeconds <= 0 || this.isPaused) return;
 
     // Unified transitions (AU, morph, composite movements)
-    this.tickTransitions(dtSeconds);
+    this.animation.tick(dtSeconds);
 
     // Flush pending composite rotations (deferred from setAU calls)
     // Also triggers hair updates when HEAD changes
@@ -487,37 +430,6 @@ export class EngineThree {
   }
 
   /**
-   * Tick all active transitions by dt seconds.
-   * Applies eased interpolation and removes completed transitions.
-   * Respects individual transition pause state.
-   */
-  private tickTransitions(dt: number) {
-    const completed: string[] = [];
-
-    this.transitions.forEach((t, key) => {
-      // Skip paused transitions
-      if (t.paused) return;
-
-      t.elapsed += dt;
-      const progress = Math.min(t.elapsed / t.duration, 1.0);
-      const easedProgress = t.easing(progress);
-
-      // Interpolate and apply
-      const value = t.from + (t.to - t.from) * easedProgress;
-      t.apply(value);
-
-      // Check completion
-      if (progress >= 1.0) {
-        completed.push(key);
-        t.resolve?.();
-      }
-    });
-
-    // Remove completed transitions
-    completed.forEach(key => this.transitions.delete(key));
-  }
-
-  /**
    * Add or replace a transition for the given key.
    * If a transition with the same key exists, it is cancelled and replaced.
    * @returns TransitionHandle with { promise, pause, resume, cancel }
@@ -528,69 +440,21 @@ export class EngineThree {
     to: number,
     durationMs: number,
     apply: (value: number) => void,
-    easing: (t: number) => number = this.easeInOutQuad
+    easing?: (t: number) => number
   ): TransitionHandle {
-    // Convert to seconds once here - all callers pass milliseconds
-    const durationSec = durationMs / 1000;
-
-    // Cancel existing transition for this key
-    const existing = this.transitions.get(key);
-    if (existing?.resolve) {
-      existing.resolve(); // Resolve immediately (cancelled)
-    }
-
-    // Instant transition if duration is 0 or values are equal
-    if (durationSec <= 0 || Math.abs(to - from) < 1e-6) {
-      apply(to);
-      return {
-        promise: Promise.resolve(),
-        pause: () => {},
-        resume: () => {},
-        cancel: () => {},
-      };
-    }
-
-    let transitionObj: Transition | null = null;
-
-    const promise = new Promise<void>((resolve) => {
-      transitionObj = {
-        key,
-        from,
-        to,
-        duration: durationSec,
-        elapsed: 0,
-        apply,
-        easing,
-        resolve,
-        paused: false,
-      };
-      this.transitions.set(key, transitionObj);
-    });
-
-    return {
-      promise,
-      pause: () => {
-        const t = this.transitions.get(key);
-        if (t) t.paused = true;
-      },
-      resume: () => {
-        const t = this.transitions.get(key);
-        if (t) t.paused = false;
-      },
-      cancel: () => {
-        const t = this.transitions.get(key);
-        if (t) {
-          t.resolve?.();
-          this.transitions.delete(key);
-        }
-      },
-    };
+    return this.animation.addTransition(
+      key,
+      from,
+      to,
+      durationMs,
+      apply,
+      easing
+    );
   }
 
   /** Clear all running transitions (used when playback rate changes to prevent timing conflicts). */
   clearTransitions() {
-    this.transitions.forEach(t => t.resolve?.());
-    this.transitions.clear();
+    this.animation.clearTransitions();
   }
 
   /** Pause all active transitions (they will resume when update() is called again). */
@@ -610,7 +474,7 @@ export class EngineThree {
 
   /** Get count of active transitions (useful for debugging). */
   getActiveTransitionCount(): number {
-    return this.transitions.size;
+    return this.animation.getActiveTransitionCount();
   }
 
   private meshes: THREE.Mesh[] = [];
@@ -795,7 +659,6 @@ export class EngineThree {
     composer?: EffectComposer;
   }) => {
     this.meshes = meshes;
-    this.buildMorphIndexCache();
     this.objectNameCache.clear();
 
     if (scene) this.scene = scene;

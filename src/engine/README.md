@@ -217,9 +217,13 @@ Uncomment logging in:
 - Verify the `rotations` state is being updated via `updateBoneRotation()`
 - Check that `pendingCompositeNodes` is being populated
 
-## Transition System
+## Transition System (ThreeAnimation.ts + EngineThree.ts)
 
-EngineThree includes a built-in transition system for smooth AU/morph tweening:
+EngineThree uses a dedicated transition helper class, `ThreeAnimation`, for smooth AU/morph/bone tweening. The public API still lives on `EngineThree` (`transitionAU`, `transitionMorph`, `transitionViseme`, `transitionContinuum`), but the timing and interpolation logic is centralized in `ThreeAnimation.ts`.
+
+The `TransitionHandle` type used by the animation scheduler is defined in `EngineThree.types.ts`.
+
+### Basic Usage
 
 ```typescript
 // Immediate update (no smoothing)
@@ -240,18 +244,23 @@ engine.transitionAU(12, 0.8, 500);
 - Uses `THREE.Clock` for consistent deltaTime
 - Calls `engine.update(deltaSeconds)` each frame
 
-**Transition Lifecycle:**
+**Transition Lifecycle (delegated to `ThreeAnimation`):**
 1. `transitionAU(id, targetValue, duration)` called
 2. Current value captured as `from`, target as `to`
-3. Transition added to queue with `elapsed: 0`
-4. Each frame: `elapsed += deltaTime`
-5. Progress calculated: `p = elapsed / duration` (clamped 0-1)
-6. Eased value applied: `value = from + (to - from) * easeInOutQuad(p)`
-7. When `p >= 1`, transition removed from queue
+3. `EngineThree` calls `addTransition()` on its internal `ThreeAnimation` instance with:
+   - `key` (e.g., `au_12`, `morph_Brow_Raise_Inner_L`, `bone_HEAD_yaw`, `continuum_61_62`)
+   - `from`, `to`, `durationMs`
+   - `apply(value)` closure that updates morphs or composite bone state
+4. Each frame, `engine.update(dt)` calls `animation.tick(dtSeconds)`:
+   - `elapsed += dtSeconds`
+   - `p = clamp(elapsed / duration, 0, 1)`
+   - `value = from + (to - from) * easeInOutQuad(p)`
+   - `apply(value)` invoked
+5. When `p >= 1`, `ThreeAnimation` resolves the `TransitionHandle` promise and removes the transition from its internal `Map`.
 
 **Conflict Prevention:**
-- New transitions cancel existing ones for the same AU/morph
-- Prevents competing animations
+- `ThreeAnimation` tracks active transitions in a `Map<string, Transition>` keyed by `key`.
+- New transitions cancel existing ones for the same key (e.g., same AU or morph), preventing competing animations.
 
 **Pause/Resume:**
 ```typescript
@@ -299,11 +308,12 @@ The `setContinuum` and `transitionContinuum` methods handle this internally.
 
 ```
 engine/
-├── EngineThree.ts              # Main engine implementation
+├── EngineThree.ts              # Main engine implementation (morphs, bones, visemes, hair, effects)
+├── EngineThree.types.ts        # Public Engine / TransitionHandle types
+├── ThreeAnimation.ts           # Transition subsystem (lerp timing, easing, handles)
 ├── arkit/
-│   ├── shapeDict.ts            # AU → Morph/Bone mappings
-│   └── README.md               # This file
-└── README.md                   # Engine overview (this file)
+│   └── shapeDict.ts            # AU → Morph/Bone mappings and composite rotation metadata
+└── README.md                   # Engine overview and architecture (this file)
 ```
 
 ---
