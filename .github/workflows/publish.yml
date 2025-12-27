@@ -50,7 +50,8 @@ jobs:
           npm version ${{ github.event.inputs.version }} -m "Bump version to %s"
           git push --follow-tags
 
+      - name: Configure NPM auth
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.LOOMLARGE }}" > ~/.npmrc
+
       - name: Publish to NPM
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.LOOMLARGE }}
